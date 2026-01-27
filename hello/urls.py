@@ -1,5 +1,9 @@
 from django.urls import path, reverse_lazy
 from django.contrib.auth import views as auth_views
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
 from . import views
 
 urlpatterns = [
@@ -77,5 +81,8 @@ urlpatterns = [
          name='password_reset_complete'),
     
     # API endpoints
+    # JWT token endpoints for mobile clients
+    path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/user-faculty-data/', views.get_user_faculty_data, name='get_user_faculty_data'),
 ]

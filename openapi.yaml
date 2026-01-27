@@ -1,0 +1,369 @@
+openapi: 3.0.3
+info:
+  title: ASSIST Auto-Scheduling API
+  version: 1.0.0
+  description: API spec for mobile clients (Kotlin Jetpack Compose). Uses JWT bearer auth for protected endpoints.
+servers:
+  - url: https://api.example.com
+    description: Production server (replace with staging URL)
+  - url: http://localhost:8000
+    description: Local development
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    TokenPair:
+      type: object
+      properties:
+        access:
+          type: string
+        refresh:
+          type: string
+      required: [access, refresh]
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+        gender:
+          type: string
+        is_staff:
+          type: boolean
+    ScheduleItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        course_code:
+          type: string
+        course_title:
+          type: string
+        day:
+          type: integer
+          description: 0=Mon .. 5=Sat
+        start_time:
+          type: string
+          example: '08:30'
+        end_time:
+          type: string
+          example: '10:00'
+        room:
+          type: string
+        section_name:
+          type: string
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        errors:
+          type: array
+          items:
+            type: string
+paths:
+  /api/auth/token/:
+    post:
+      summary: Obtain JWT token pair (access + refresh)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+              required: [username, password]
+      responses:
+        '200':
+          description: Token pair
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+        '400':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/token/refresh/:
+    post:
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh:
+                  type: string
+              required: [refresh]
+      responses:
+        '200':
+          description: New access token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access:
+                    type: string
+  /api/auth/password-reset:
+    post:
+      summary: Send password reset email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+              required: [email]
+      responses:
+        '200':
+          description: Email sent (or printed in console during DEBUG)
+  /api/auth/password-reset/confirm:
+    post:
+      summary: Confirm password reset (set new password)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                uid:
+                  type: string
+                token:
+                  type: string
+                new_password:
+                  type: string
+              required: [uid, token, new_password]
+      responses:
+        '200':
+          description: Password set successfully
+  /api/user:
+    get:
+      summary: Get current user profile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+    put:
+      summary: Update user profile (including name/email/gender)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                first_name:
+                  type: string
+                last_name:
+                  type: string
+                email:
+                  type: string
+                gender:
+                  type: string
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Validation errors
+  /api/user/password-change:
+    post:
+      summary: Change password (authenticated)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                current_password:
+                  type: string
+                new_password:
+                  type: string
+              required: [current_password, new_password]
+      responses:
+        '200':
+          description: Password changed
+        '400':
+          description: Validation errors
+  /api/faculty/{faculty_id}/schedule:
+    get:
+      summary: Get schedule for a faculty member
+      parameters:
+        - in: path
+          name: faculty_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: Schedule items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScheduleItem'
+  /api/sections/{section_id}/schedule:
+    get:
+      summary: Get schedule for a section
+      parameters:
+        - in: path
+          name: section_id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: Schedule items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScheduleItem'
+  /api/schedules:
+    get:
+      summary: List schedules with optional filters
+      parameters:
+        - in: query
+          name: faculty
+          schema:
+            type: integer
+        - in: query
+          name: section
+          schema:
+            type: integer
+        - in: query
+          name: day
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Schedule list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScheduleItem'
+  /api/courses:
+    get:
+      summary: List courses
+      responses:
+        '200':
+          description: Course list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    course_code:
+                      type: string
+                    title:
+                      type: string
+  /api/rooms:
+    get:
+      summary: List rooms
+      responses:
+        '200':
+          description: Room list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    name:
+                      type: string
+  /api/upload/profile-picture:
+    post:
+      summary: Upload user profile picture
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Upload successful
+  /api/user-faculty-data:
+    get:
+      summary: Get combined user+faculty data (used by web UI)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Combined data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+                  faculty:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      first_name:
+                        type: string
+                      last_name:
+                        type: string
+                      email:
+                        type: string
+                      profile_picture:
+                        type: string
+                        description: URL to picture
+security:
+  - bearerAuth: []
