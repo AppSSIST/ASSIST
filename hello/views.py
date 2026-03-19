@@ -2872,3 +2872,203 @@ def get_user_faculty_data(request):
             'gender': '',
             'profile_picture_url': None,
         })
+
+def api_password_reset(request):
+    """API endpoint to send password reset email"""
+    if request.method == 'POST':
+        try:
+            import json
+            data = json.loads(request.body)
+            email = data.get('email')
+
+            if not email:
+                return JsonResponse({'error': 'Email is required'}, status=400)
+
+            # Check if user exists
+            try:
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
+                # Don't reveal if email exists or not for security
+                return JsonResponse({'message': 'If an account with this email exists, a password reset link has been sent.'})
+
+            # Generate password reset token
+            from django.contrib.auth.tokens import default_token_generator
+            from django.utils.http import urlsafe_base64_encode
+            from django.utils.encoding import force_bytes
+
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+
+            # Build reset URL
+            from django.urls import reverse
+            reset_url = request.build_absolute_uri(
+                reverse('password_reset_confirm', kwargs={'uidb64': uid, 'token': token})
+            )
+
+            # Send email
+            subject = 'Password Reset Request for ASSIST'
+            message = f'''Hello {user.first_name},
+
+You have requested to reset your password for the ASSIST system.
+
+Please click the following link to reset your password:
+{reset_url}
+
+This link will expire in 7 days.
+
+If you did not request this password reset, please ignore this email.
+
+Best regards,
+ASSIST Administration Team'''
+
+            try:
+                email_message = EmailMessage(
+                    subject=subject,
+                    body=message,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=[email],
+                )
+                email_message.send(fail_silently=False)
+            except Exception as e:
+                print(f"Error sending password reset email: {str(e)}")
+                return JsonResponse({'error': 'Failed to send email'}, status=500)
+
+            return JsonResponse({'message': 'If an account with this email exists, a password reset link has been sent.'})
+
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        except Exception as e:
+            print(f"Error in api_password_reset: {str(e)}")
+            return JsonResponse({'error': 'Internal server error'}, status=500)
+
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+def api_password_reset_confirm(request):
+    """API endpoint to confirm password reset and set new password"""
+    if request.method == 'POST':
+        try:
+            import json
+            data = json.loads(request.body)
+            uid = data.get('uid')
+            token = data.get('token')
+            new_password = data.get('new_password')
+
+            if not all([uid, token, new_password]):
+                return JsonResponse({'error': 'uid, token, and new_password are required'}, status=400)
+
+            # Decode uid
+            from django.utils.http import urlsafe_base64_decode
+            from django.utils.encoding import force_str
+            from django.contrib.auth.tokens import default_token_generator
+
+            try:
+                user_id = force_str(urlsafe_base64_decode(uid))
+                user = User.objects.get(pk=user_id)
+            except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+                return JsonResponse({'error': 'Invalid reset link'}, status=400)
+
+            # Check token
+            if not default_token_generator.check_token(user, token):
+                return JsonResponse({'error': 'Invalid or expired reset token'}, status=400)
+
+            # Validate new password
+            from django.contrib.auth.password_validation import validate_password
+            try:
+                validate_password(new_password, user)
+            except Exception as e:
+                return JsonResponse({'error': str(e)}, status=400)
+
+            # Set new password
+            user.set_password(new_password)
+            user.save()
+
+            return JsonResponse({'message': 'Password has been reset successfully'})
+
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        except Exception as e:
+            print(f"Error in api_password_reset_confirm: {str(e)}")
+            return JsonResponse({'error': 'Internal server error'}, status=500)
+
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+@login_required(login_url='admin_login')
+@user_passes_test(is_admin, login_url='admin_login')
+def get_available_resources(request):
+    """API endpoint to get available faculty and rooms for a given time slot"""
+    if request.method == 'GET':
+        try:
+            day = request.GET.get('day')
+            start_time = request.GET.get('start_time')
+            end_time = request.GET.get('end_time')
+
+            if not all([day, start_time, end_time]):
+                return JsonResponse({'error': 'day, start_time, and end_time are required'}, status=400)
+
+            # Convert day name to integer if needed
+            day_mapping = {
+                'Monday': 0,
+                'Tuesday': 1,
+                'Wednesday': 2,
+                'Thursday': 3,
+                'Friday': 4,
+                'Saturday': 5
+            }
+            
+            if day in day_mapping:
+                day = day_mapping[day]
+            else:
+                day = int(day)
+
+            # Get all faculty and rooms
+            all_faculty = Faculty.objects.all().order_by('last_name', 'first_name')
+            all_rooms = Room.objects.all().order_by('campus', 'room_number')
+
+            # Filter out faculty with conflicts
+            available_faculty = []
+            for faculty in all_faculty:
+                has_conflict = Schedule.objects.filter(
+                    faculty=faculty,
+                    day=day,
+                    start_time__lt=end_time,
+                    end_time__gt=start_time
+                ).exists()
+
+                if not has_conflict:
+                    available_faculty.append({
+                        'id': faculty.id,
+                        'name': f"{faculty.last_name}, {faculty.first_name}",
+                        'email': faculty.email
+                    })
+
+            # Filter out rooms with conflicts
+            available_rooms = []
+            for room in all_rooms:
+                has_conflict = Schedule.objects.filter(
+                    room=room,
+                    day=day,
+                    start_time__lt=end_time,
+                    end_time__gt=start_time
+                ).exists()
+
+                if not has_conflict:
+                    available_rooms.append({
+                        'id': room.id,
+                        'name': f"{room.get_room_type_display()}: {'A' if room.campus == 'arlegui' else 'C'}-{room.room_number}",
+                        'campus': room.campus,
+                        'room_type': room.room_type,
+                        'capacity': room.capacity
+                    })
+
+            return JsonResponse({
+                'success': True,
+                'faculty': available_faculty,
+                'rooms': available_rooms
+            })
+
+        except Exception as e:
+            print(f"Error in get_available_resources: {str(e)}")
+            return JsonResponse({'error': 'Internal server error'}, status=500)
+
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
+

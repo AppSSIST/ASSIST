@@ -39,7 +39,7 @@ SECRET_KEY = 'django-insecure-uts54#%bbb5=2kq!x7r1_^cw5!mns5bil#cobw+ynz$zda(ix#
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['auto-scheduling-5.onrender.com', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['auto-scheduling-5.onrender.com', 'localhost', '127.0.0.1', 'testserver']
 
 
 # Application definition
@@ -166,13 +166,14 @@ SIMPLE_JWT = {
 # Email configuration: prefer environment variables.
 # For local development (DEBUG=True) default to console backend so
 # password reset links are printed to the runserver console.
+# But allow SMTP for testing by setting DJANGO_EMAIL_BACKEND=smtp
 EMAIL_BACKEND = os.environ.get('DJANGO_EMAIL_BACKEND') or (
-    'django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend'
+    'django.core.mail.backends.console.EmailBackend' if DEBUG and not os.environ.get('FORCE_SMTP_EMAIL') else 'django.core.mail.backends.smtp.EmailBackend'
 )
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in ('1', 'true', 'yes')
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'msnbaldonado@tip.edu.ph')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'votqmnmkqjbbdrof')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 
