@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -34,10 +35,10 @@ MIDDLEWARE = [
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-uts54#%bbb5=2kq!x7r1_^cw5!mns5bil#cobw+ynz$zda(ix#'
+SECRET_KEY = config('SECRET_KEY', default='django-insecure-uts54#%bbb5=2kq!x7r1_^cw5!mns5bil#cobw+ynz$zda(ix#')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = ['auto-scheduling-5.onrender.com', 'localhost', '127.0.0.1', 'testserver']
 
@@ -158,22 +159,20 @@ REST_FRAMEWORK = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.environ.get('JWT_ACCESS_MINUTES', '60'))),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.environ.get('JWT_REFRESH_DAYS', '7'))),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(config('JWT_ACCESS_MINUTES', default='60'))),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(config('JWT_REFRESH_DAYS', default='7'))),
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# Email configuration: prefer environment variables.
-# For local development (DEBUG=True) default to console backend so
-# password reset links are printed to the runserver console.
-# But allow SMTP for testing by setting DJANGO_EMAIL_BACKEND=smtp
-EMAIL_BACKEND = os.environ.get('DJANGO_EMAIL_BACKEND') or (
-    'django.core.mail.backends.console.EmailBackend' if DEBUG and not os.environ.get('FORCE_SMTP_EMAIL') else 'django.core.mail.backends.smtp.EmailBackend'
+# Email configuration: uses .env file
+EMAIL_BACKEND = config(
+    'DJANGO_EMAIL_BACKEND',
+    default='django.core.mail.backends.smtp.EmailBackend' if config('FORCE_SMTP_EMAIL', default=False, cast=bool) else 'django.core.mail.backends.console.EmailBackend'
 )
-EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
-EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in ('1', 'true', 'yes')
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'msnbaldonado@tip.edu.ph')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'votqmnmkqjbbdrof')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='msnbaldonado@tip.edu.ph')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='votqmnmkqjbbdrof')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default=EMAIL_HOST_USER)
 
