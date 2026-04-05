@@ -4,23 +4,36 @@ let currentSectionId = null;
         let selectedHour = 7;
         let selectedMinute = 30;
         let selectedPeriod = 'AM';
+        let currentSchedules = []; // Store current schedules for validation
+        let facultyScheduleCache = {}; // Cache schedule data by faculty ID
 
         // Tab switching
         function switchTab(tabName) {
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
             
-            if (tabName === 'generate') {
-                document.querySelector('.tab-btn:first-child').classList.add('active');
-                document.getElementById('generateTab').classList.add('active');
-            } else {
-                document.querySelector('.tab-btn:last-child').classList.add('active');
-                document.getElementById('manualTab').classList.add('active');
-            }
+            document.querySelector('.tab-btn').classList.add('active');
+            document.getElementById('manualTab').classList.add('active');
         }
 
         // Modal management
         function openScheduleModal() {
+            // Reset form fields
+            document.getElementById('course_select').value = '';
+            document.getElementById('faculty_select').value = '';
+            document.getElementById('section_select').value = currentSectionId || '';
+            document.getElementById('room_select').value = '';
+            document.getElementById('day_select').value = '';
+            document.getElementById('start_time').value = '07:30';
+            document.getElementById('end_time').value = '08:30';
+            document.getElementById('duration-display').style.display = 'none';
+            setTimeDisplay('start_time');
+            setTimeDisplay('end_time');
+            
+            // Initialize day and faculty filtering
+            filterAvailableDays();
+            filterAvailableInstructors('faculty_select');
+            
             switchTab('manual');
             openModal('scheduleModal');
         }
@@ -31,6 +44,22 @@ let currentSectionId = null;
 
         function closeModal(modalId) {
             document.getElementById(modalId).style.display = 'none';
+        }
+
+        function handleSectionSelectChange() {
+            const sectionSelect = document.getElementById('section_select');
+            if (!sectionSelect) return;
+
+            const selectedOption = sectionSelect.selectedOptions[0];
+            if (!selectedOption || !selectedOption.value) return;
+
+            const sectionId = selectedOption.value;
+            const sectionName = selectedOption.dataset.sectionName || selectedOption.textContent;
+            const curriculum = selectedOption.dataset.sectionCurriculum || '';
+
+            if (sectionId && String(sectionId) !== String(currentSectionId)) {
+                loadScheduleView(sectionId, sectionName, curriculum);
+            }
         }
 
         // Alert system
@@ -77,21 +106,7 @@ let currentSectionId = null;
 
         // Generate filters update
         function updateGenerateFilters() {
-            const select = document.getElementById('generate_section_select');
-            const option = select.options[select.selectedIndex];
-            
-            if (option.value) {
-                document.getElementById('generate_curriculum_display').value = option.dataset.curriculum;
-                const year = option.dataset.year;
-                const yearText = year == 1 ? '1st Year' : year == 2 ? '2nd Year' : year == 3 ? '3rd Year' : '4th Year';
-                document.getElementById('generate_year_display').value = yearText;
-                const semester = option.dataset.semester;
-                document.getElementById('generate_semester_display').value = semester == 1 ? '1st Semester' : '2nd Semester';
-            } else {
-                document.getElementById('generate_curriculum_display').value = '';
-                document.getElementById('generate_year_display').value = '';
-                document.getElementById('generate_semester_display').value = '';
-            }
+            // Placeholder - function removed with auto-generation feature
         }
 
         // CSRF helper
@@ -116,163 +131,462 @@ let currentSectionId = null;
             return fetch(url, options);
         }
 
-        // Generate schedule submission
-        function submitGenerateSchedule(event) {
-            event.preventDefault();
-            const formData = new FormData(event.target);
-            const sectionId = formData.get('section');
+        // Manual schedule submission - IMPROVED with validation
+        // Filter available days based on selected course
+        function filterAvailableDays() {
+            const courseId = document.getElementById('course_select').value;
+            const daySelect = document.getElementById('day_select');
+            const dayOptions = daySelect.querySelectorAll('option');
+            const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const scheduledDays = new Set();
             
-            if (!sectionId) {
-                showAlert('Please select a section', 'error');
+            if (courseId) {
+                const selectedCourseCode = document.getElementById('course_select').selectedOptions[0]?.textContent.split(' - ')[0] || '';
+                currentSchedules.forEach(schedule => {
+                    const scheduleCourseId = schedule.course_id ?? schedule.course?.id ?? schedule.course;
+                    const sameCourse = scheduleCourseId != null
+                        ? scheduleCourseId == courseId
+                        : schedule.course_code && schedule.course_code === selectedCourseCode;
+
+                    if (!sameCourse) {
+                        return;
+                    }
+
+                    let dayIndex = parseInt(schedule.day);
+                    if (Number.isNaN(dayIndex)) {
+                        dayIndex = dayNames.indexOf(schedule.day);
+                    }
+                    if (!Number.isNaN(dayIndex) && dayIndex >= 0) {
+                        scheduledDays.add(dayIndex);
+                    }
+                });
+            }
+            
+            dayOptions.forEach(option => {
+                const dayValue = option.value;
+                if (dayValue === '') {
+                    option.disabled = false;
+                    option.hidden = false;
+                    option.textContent = 'Select a day...';
+                    return;
+                }
+
+                const dayNum = parseInt(dayValue);
+                const isUnavailable = scheduledDays.has(dayNum);
+                option.disabled = isUnavailable;
+                option.hidden = isUnavailable;
+                option.textContent = dayNames[dayNum] + (isUnavailable ? ' (Already scheduled)' : '');
+            });
+            
+            if (daySelect.value !== '' && daySelect.options[daySelect.selectedIndex].disabled) {
+                daySelect.value = '';
+            }
+        }
+
+        function getScheduleDayIndex(schedule) {
+            const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            let dayIndex = parseInt(schedule.day);
+            if (Number.isNaN(dayIndex)) {
+                dayIndex = dayNames.indexOf(schedule.day);
+            }
+            return Number.isNaN(dayIndex) ? null : dayIndex;
+        }
+
+        function timeToMinutes(timeString) {
+            if (!timeString) return null;
+            const [hour, minute] = timeString.split(':').map(Number);
+            if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+            return hour * 60 + minute;
+        }
+
+        function timesOverlap(startA, endA, startB, endB) {
+            const aStart = timeToMinutes(startA);
+            const aEnd = timeToMinutes(endA);
+            const bStart = timeToMinutes(startB);
+            const bEnd = timeToMinutes(endB);
+            if (aStart == null || aEnd == null || bStart == null || bEnd == null) return false;
+            return aStart < bEnd && bStart < aEnd;
+        }
+
+        function fetchFacultySchedule(facultyId) {
+            if (facultyScheduleCache[facultyId]) {
+                return Promise.resolve(facultyScheduleCache[facultyId]);
+            }
+            return fetch(`/admin/faculty/${facultyId}/schedule-data/`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        facultyScheduleCache[facultyId] = data.schedules || [];
+                        return facultyScheduleCache[facultyId];
+                    }
+                    return [];
+                })
+                .catch(() => []);
+        }
+
+        async function filterAvailableInstructors(selectId = 'faculty_select') {
+            const isEdit = selectId === 'edit_faculty_select';
+            const dayValue = document.getElementById(isEdit ? 'edit_day_select' : 'day_select')?.value;
+            const startTime = document.getElementById(isEdit ? 'edit_start_time' : 'start_time')?.value;
+            const endTime = document.getElementById(isEdit ? 'edit_end_time' : 'end_time')?.value;
+            const facultySelect = document.getElementById(selectId);
+            if (!facultySelect) return;
+
+            const facultyIds = Array.from(facultySelect.querySelectorAll('option'))
+                .map(option => option.value)
+                .filter(value => value !== '');
+
+            const unavailableFaculty = new Set();
+
+            if (dayValue && startTime && endTime) {
+                await Promise.all(facultyIds.map(async facultyId => {
+                    const schedules = await fetchFacultySchedule(facultyId);
+                    schedules.forEach(schedule => {
+                        const scheduleDay = getScheduleDayIndex(schedule);
+                        if (scheduleDay === null || String(scheduleDay) !== dayValue) return;
+                        if (!schedule.start_time || !schedule.end_time) return;
+                        if (timesOverlap(startTime, endTime, schedule.start_time, schedule.end_time)) {
+                            unavailableFaculty.add(String(facultyId));
+                        }
+                    });
+                }));
+            }
+
+            facultySelect.querySelectorAll('option').forEach(option => {
+                if (option.value === '') {
+                    option.disabled = false;
+                    option.hidden = false;
+                    option.textContent = option.dataset.originalText || option.textContent;
+                    return;
+                }
+
+                if (!option.dataset.originalText) {
+                    option.dataset.originalText = option.textContent;
+                }
+                const originalText = option.dataset.originalText;
+                const isConflict = unavailableFaculty.has(option.value);
+                option.disabled = isConflict;
+                option.hidden = isConflict;
+                option.textContent = isConflict ? `${originalText} (Conflict)` : originalText;
+            });
+
+            const selectedOption = facultySelect.selectedOptions[0];
+            if (selectedOption && selectedOption.disabled) {
+                const name = selectedOption.dataset.originalText || selectedOption.textContent;
+                showAlert(`${name} has a scheduling conflict with the selected day/time. Please choose another instructor.`, 'warning');
+                facultySelect.value = '';
+            }
+        }
+
+        // Validate that start time is before end time
+        function validateTimeRange() {
+            const startTimeInput = document.getElementById('start_time');
+            const endTimeInput = document.getElementById('end_time');
+            const startTime = startTimeInput.value;
+            const endTime = endTimeInput.value;
+            
+            if (!startTime || !endTime) return true;
+            
+            if (startTime >= endTime) {
+                showAlert('End time must be after start time', 'error');
+                endTimeInput.focus();
+                return false;
+            }
+            
+            // Check time constraint (7:30 AM - 9:30 PM)
+            if (startTime < '07:30' || startTime > '21:30') {
+                showAlert('Start time must be between 7:30 AM and 9:30 PM', 'error');
+                return false;
+            }
+            if (endTime < '07:30' || endTime > '21:30') {
+                showAlert('End time must be between 7:30 AM and 9:30 PM', 'error');
+                return false;
+            }
+            
+            return true;
+        }
+
+        function initializeTimeWheels() {
+            document.querySelectorAll('.time-wheel').forEach(wheel => {
+                if (wheel.dataset.inited === 'true') return;
+                const targetField = wheel.dataset.target;
+                const input = document.getElementById(targetField);
+                if (!input) return;
+
+                const hourColumn = wheel.querySelector('.picker-column[data-unit="hour"]');
+                const minuteColumn = wheel.querySelector('.picker-column[data-unit="minute"]');
+                const periodColumn = wheel.querySelector('.picker-column[data-unit="period"]');
+                if (!hourColumn || !minuteColumn || !periodColumn) return;
+
+                buildInlineTimeColumn(hourColumn, Array.from({ length: 12 }, (_, index) => index + 1), 18);
+                buildInlineTimeColumn(minuteColumn, Array.from({ length: 12 }, (_, index) => index * 5), 18);
+                buildInlineTimeColumn(periodColumn, ['AM', 'PM'], 10, true);
+
+                [hourColumn, minuteColumn, periodColumn].forEach(column => {
+                    const unit = column.dataset.unit;
+                    column.addEventListener('scroll', () => {
+                        if (unit === 'period') {
+                            updateInlineSelectionFromScroll(column);
+                        } else {
+                            handleInfiniteScroll(column, unit);
+                        }
+                        updateInlineTimeValueFromWheel(wheel);
+                        scheduleCenterAfterScroll(column);
+                    });
+                });
+
+                wheel.dataset.inited = 'true';
+                syncInlineTimeWheel(wheel, true);
+            });
+        }
+
+        function buildInlineTimeColumn(column, values, repeatCount, isText = false) {
+            column.innerHTML = '';
+            for (let i = 0; i < 4; i++) {
+                appendInlineSpacer(column);
+            }
+            for (let repeat = 0; repeat < repeatCount; repeat++) {
+                values.forEach(value => {
+                    const item = document.createElement('button');
+                    item.type = 'button';
+                    item.className = 'picker-item';
+                    item.dataset.value = value;
+                    item.textContent = isText ? value : value.toString().padStart(2, '0');
+                    item.addEventListener('click', () => selectInlineTimeItem(column, value));
+                    column.appendChild(item);
+                });
+            }
+            for (let i = 0; i < 4; i++) {
+                appendInlineSpacer(column);
+            }
+        }
+
+        function appendInlineSpacer(column) {
+            const spacer = document.createElement('div');
+            spacer.className = 'picker-item time-picker-spacer';
+            spacer.innerHTML = '&nbsp;';
+            column.appendChild(spacer);
+        }
+
+        function selectInlineTimeItem(column, value) {
+            const unit = column.dataset.unit;
+            scrollInlineColumnToValue(column, value, true);
+            updateInlineSelectionFromScroll(column);
+            const wheel = column.closest('.time-wheel');
+            if (wheel) updateInlineTimeValueFromWheel(wheel);
+        }
+
+        function scrollInlineColumnToValue(column, value, instant = false) {
+            const items = Array.from(column.querySelectorAll('.picker-item'));
+            const matching = items.filter(item => !item.classList.contains('time-picker-spacer') &&
+                (column.dataset.unit === 'period'
+                    ? item.dataset.value === value
+                    : parseInt(item.dataset.value) === value));
+            if (!matching.length) return;
+
+            let closest = matching[0];
+            let minDist = Infinity;
+            const center = column.getBoundingClientRect().top + column.clientHeight / 2;
+            matching.forEach(item => {
+                const rect = item.getBoundingClientRect();
+                const mid = rect.top + rect.height / 2;
+                const dist = Math.abs(center - mid);
+                if (dist < minDist) {
+                    minDist = dist;
+                    closest = item;
+                }
+            });
+
+            closest.scrollIntoView({
+                behavior: instant ? 'auto' : 'smooth',
+                block: 'center'
+            });
+            updateInlineSelectionVisual(column, value);
+        }
+
+        function updateInlineSelectionFromScroll(column) {
+            const items = Array.from(column.querySelectorAll('.picker-item:not(.time-picker-spacer)'));
+            const center = column.getBoundingClientRect().top + column.clientHeight / 2;
+
+            let closest = null;
+            let minDist = Infinity;
+            items.forEach(item => {
+                const rect = item.getBoundingClientRect();
+                const mid = rect.top + rect.height / 2;
+                const dist = Math.abs(center - mid);
+                if (dist < minDist) {
+                    minDist = dist;
+                    closest = item;
+                }
+            });
+
+            if (!closest) return;
+            items.forEach(item => item.classList.remove('selected'));
+            closest.classList.add('selected');
+        }
+
+        function updateInlineSelectionVisual(column, value) {
+            const items = Array.from(column.querySelectorAll('.picker-item:not(.time-picker-spacer)'));
+            items.forEach(item => item.classList.remove('selected'));
+
+            const matching = items.filter(item =>
+                column.dataset.unit === 'period'
+                    ? item.dataset.value === value
+                    : parseInt(item.dataset.value) === value);
+            if (!matching.length) return;
+
+            let closest = matching[0];
+            let minDist = Infinity;
+            const center = column.getBoundingClientRect().top + column.clientHeight / 2;
+            matching.forEach(item => {
+                const rect = item.getBoundingClientRect();
+                const mid = rect.top + rect.height / 2;
+                const dist = Math.abs(center - mid);
+                if (dist < minDist) {
+                    minDist = dist;
+                    closest = item;
+                }
+            });
+            closest.classList.add('selected');
+        }
+
+        function getInlineSelectedValue(column) {
+            const selected = column.querySelector('.picker-item.selected');
+            if (selected) {
+                return column.dataset.unit === 'period' ? selected.dataset.value : parseInt(selected.dataset.value);
+            }
+            const items = Array.from(column.querySelectorAll('.picker-item:not(.time-picker-spacer)'));
+            const center = column.getBoundingClientRect().top + column.clientHeight / 2;
+            let closest = null;
+            let minDist = Infinity;
+            items.forEach(item => {
+                const rect = item.getBoundingClientRect();
+                const mid = rect.top + rect.height / 2;
+                const dist = Math.abs(center - mid);
+                if (dist < minDist) {
+                    minDist = dist;
+                    closest = item;
+                }
+            });
+            if (!closest) return null;
+            return column.dataset.unit === 'period' ? closest.dataset.value : parseInt(closest.dataset.value);
+        }
+
+        function syncInlineTimeWheelForTarget(fieldId) {
+            const wheel = document.querySelector(`.time-wheel[data-target="${fieldId}"]`);
+            if (!wheel) return;
+            if (wheel.dataset.inited !== 'true') initializeTimeWheels();
+            syncInlineTimeWheel(wheel, true);
+        }
+
+        function syncInlineTimeWheel(wheel, instant = false) {
+            const targetField = wheel.dataset.target;
+            const input = document.getElementById(targetField);
+            if (!input) return;
+
+            const [time12, period] = convertTo12Hour(input.value || '07:30');
+            const [hourString, minuteString] = time12.split(':');
+            const hour = parseInt(hourString, 10);
+            const minute = parseInt(minuteString, 10);
+
+            const hourColumn = wheel.querySelector('.picker-column[data-unit="hour"]');
+            const minuteColumn = wheel.querySelector('.picker-column[data-unit="minute"]');
+            const periodColumn = wheel.querySelector('.picker-column[data-unit="period"]');
+            if (!hourColumn || !minuteColumn || !periodColumn) return;
+
+            scrollInlineColumnToValue(hourColumn, hour, instant);
+            scrollInlineColumnToValue(minuteColumn, minute, instant);
+            scrollInlineColumnToValue(periodColumn, period, instant);
+
+            updateInlineSelectionVisual(hourColumn, hour);
+            updateInlineSelectionVisual(minuteColumn, minute);
+            updateInlineSelectionVisual(periodColumn, period);
+            updateInlineTimeValueFromWheel(wheel);
+        }
+
+        function updateInlineTimeValueFromWheel(wheel) {
+            const hourColumn = wheel.querySelector('.picker-column[data-unit="hour"]');
+            const minuteColumn = wheel.querySelector('.picker-column[data-unit="minute"]');
+            const periodColumn = wheel.querySelector('.picker-column[data-unit="period"]');
+            const input = document.getElementById(wheel.dataset.target);
+            if (!hourColumn || !minuteColumn || !periodColumn || !input) return;
+
+            const hour = getInlineSelectedValue(hourColumn);
+            const minute = getInlineSelectedValue(minuteColumn);
+            const period = getInlineSelectedValue(periodColumn);
+            if (hour == null || minute == null || !period) return;
+
+            input.value = convertTo24Hour(hour, minute, period);
+            if (wheel.dataset.target === 'start_time' || wheel.dataset.target === 'end_time') {
+                updateDurationDisplay();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', initializeTimeWheels);
+
+        // Update duration display
+        function updateDurationDisplay() {
+            const startTime = document.getElementById('start_time').value;
+            const endTime = document.getElementById('end_time').value;
+            
+            if (!startTime || !endTime) {
+                document.getElementById('duration-display').style.display = 'none';
                 return;
             }
             
-            showLoading();
-            closeModal('scheduleModal');
+            if (startTime >= endTime) {
+                document.getElementById('duration-display').style.display = 'none';
+                return;
+            }
             
-            fetchWithCSRF('/admin/schedule/generate/', {
-                method: 'POST',
-                body: formData
-            })
-            .then(res => res.json())
-            .then(data => {
-                hideLoading();
-                
-                if (data.success) {
-                    const message = `Successfully generated ${data.schedules_created} schedule entries!`;
-                    
-                    if (data.notes && data.notes.length > 0) {
-                        showAlert(`${message} Check notes below.`, 'info');
-                        console.log('Scheduling Notes:', data.notes);
-                        // Log notes to console
-                        data.notes.forEach(note => console.log('📌', note));
-                    } else {
-                        showAlert(message, 'success');
-                    }
-                    
-                    if (data.section_id) {
-                        const card = document.querySelector(`[data-section-id="${data.section_id}"]`);
-                        if (card) {
-                            const sectionName = card.querySelector('.card-title').textContent;
-                            const curriculum = card.querySelector('.card-subtitle').textContent;
-                            // Load schedule view immediately and show confirmation modal
-                            loadScheduleView(data.section_id, sectionName, curriculum);
-                            // Show confirmation modal after schedule loads
-                            setTimeout(() => showScheduleConfirmation(data.section_id, data.notes), 800);
-                        }
-                    }
+            // Calculate duration
+            const [startHour, startMin] = startTime.split(':').map(Number);
+            const [endHour, endMin] = endTime.split(':').map(Number);
+            const durationMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin);
+            
+            let durationText = '';
+            if (durationMinutes < 60) {
+                durationText = `${durationMinutes} minutes`;
+            } else {
+                const hours = Math.floor(durationMinutes / 60);
+                const mins = durationMinutes % 60;
+                if (mins === 0) {
+                    durationText = `${hours} hour${hours > 1 ? 's' : ''}`;
                 } else {
-                    const err = data.errors ? data.errors.join(', ') : (data.error || 'Unknown error');
-                    showAlert('Error generating schedule: ' + err, 'error');
+                    durationText = `${hours} hour${hours > 1 ? 's' : ''} ${mins} minutes`;
                 }
-            })
-            .catch(err => {
-                hideLoading();
-                console.error('Generate error:', err);
-                showAlert('Error generating schedule', 'error');
-            });
-        }
-
-        // Show schedule confirmation modal
-        function showScheduleConfirmation(sectionId, notes) {
-            const confirmModal = document.createElement('div');
-            confirmModal.className = 'modal';
-            confirmModal.id = 'scheduleConfirmModal';
-            confirmModal.style.display = 'block';
-            
-            let notesHtml = '';
-            if (notes && notes.length > 0) {
-                notesHtml = `
-                    <div style="background-color: #e7f3ff; border-left: 4px solid #2196F3; padding: 12px; margin-bottom: 15px; border-radius: 4px;">
-                        <strong style="color: #1976D2;">Scheduling Notes:</strong>
-                        <ul style="margin: 8px 0 0 20px; color: #495057; font-size: 0.9rem;">
-                            ${notes.map(note => `<li style="margin: 4px 0;">${note}</li>`).join('')}
-                        </ul>
-                    </div>
-                `;
             }
             
-            confirmModal.innerHTML = `
-                <div class="modal-content" style="max-width: 600px;">
-                    <div class="modal-header">
-                        <h2>Schedule Generated</h2>
-                        <span class="close" onclick="closeScheduleConfirmation()">&times;</span>
-                    </div>
-                    <div style="padding: 30px;">
-                        ${notesHtml}
-                        <p style="font-size: 1rem; color: #495057; margin-bottom: 20px; line-height: 1.6;">
-                            The schedule has been generated successfully. Please review the schedule on the right panel.
-                        </p>
-                        <p style="font-size: 0.95rem; color: #6C757D; margin-bottom: 0; line-height: 1.5;">
-                            You can click on any schedule block to edit the details, or finalize the schedule if everything looks good.
-                        </p>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn-secondary" onclick="regenerateSchedule(${sectionId})">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18">
-                                <path fill="currentColor" d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
-                            </svg>
-                            Regenerate
-                        </button>
-                        <button type="button" class="btn-primary" onclick="finalizeSchedule(${sectionId})">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18">
-                                <path fill="currentColor" d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/>
-                            </svg>
-                            Finalize Schedule
-                        </button>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(confirmModal);
+            document.getElementById('duration-text').textContent = durationText;
+            document.getElementById('duration-display').style.display = 'block';
         }
 
-        function closeScheduleConfirmation() {
-            const modal = document.getElementById('scheduleConfirmModal');
-            if (modal) {
-                modal.remove();
-            }
-        }
-
-        function regenerateSchedule(sectionId) {
-            closeScheduleConfirmation();
-            const section = document.querySelector(`[data-section-id="${sectionId}"]`);
-            if (section) {
-                const selectElement = document.getElementById('generate_section_select');
-                selectElement.value = sectionId;
-                updateGenerateFilters();
-                switchTab('generate');
-                openModal('scheduleModal');
-            }
-        }
-
-        function finalizeSchedule(sectionId) {
-            fetchWithCSRF(`/admin/section/${sectionId}/toggle-status/`, {
-                method: 'POST'
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    showAlert('Schedule finalized successfully!', 'success');
-                    closeScheduleConfirmation();
-                    // Update the status display on the card
-                    const statusElement = document.getElementById(`status-${sectionId}`);
-                    if (statusElement) {
-                        statusElement.textContent = data.status_display;
-                        statusElement.style.color = data.status === 'complete' ? '#28a745' : '#dc3545';
-                    }
-                } else {
-                    showAlert('Error finalizing schedule', 'error');
-                }
-            })
-            .catch(err => {
-                console.error('Error finalizing schedule:', err);
-                showAlert('Error finalizing schedule', 'error');
-            });
-        }
-
-        // Manual schedule submission
         function submitCreateSchedule(event) {
             event.preventDefault();
+            
+            // Validate times before submitting
+            if (!validateTimeRange()) {
+                return;
+            }
+            
+            // Check for duplicate course on same day
+            const courseId = document.getElementById('course_select').value;
+            const dayValue = document.getElementById('day_select').value;
+            const courseOption = document.getElementById('course_select').options[document.getElementById('course_select').selectedIndex];
+            const courseCode = courseOption.textContent.split(' - ')[0]; // Extract course code
+            
+            if (courseId && dayValue) {
+                const isDuplicate = currentSchedules.some(schedule => 
+                    schedule.course_id == courseId && schedule.day == dayValue
+                );
+                
+                if (isDuplicate) {
+                    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                    showAlert(`${courseCode} is already scheduled on ${dayNames[dayValue]}. A course cannot have multiple sessions on the same day.`, 'error');
+                    return;
+                }
+            }
+            
             const formData = new FormData(event.target);
 
             fetchWithCSRF('/admin/schedule/add/', {
@@ -319,12 +633,30 @@ let currentSectionId = null;
                     
                     document.getElementById('edit_start_time').value = data.start_time;
                     document.getElementById('edit_end_time').value = data.end_time;
+                    setTimeDisplay('edit_start_time');
+                    setTimeDisplay('edit_end_time');
+                    filterAvailableInstructors('edit_faculty_select');
                     
-                    const [startTime, startPeriod] = convertTo12Hour(data.start_time);
-                    document.getElementById('edit_start_time_display').textContent = `${startTime} ${startPeriod}`;
+                    // Update duration display for edit modal
+                    const [startHour, startMin] = data.start_time.split(':').map(Number);
+                    const [endHour, endMin] = data.end_time.split(':').map(Number);
+                    const durationMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin);
                     
-                    const [endTime, endPeriod] = convertTo12Hour(data.end_time);
-                    document.getElementById('edit_end_time_display').textContent = `${endTime} ${endPeriod}`;
+                    let durationText = '';
+                    if (durationMinutes < 60) {
+                        durationText = `${durationMinutes} minutes`;
+                    } else {
+                        const hours = Math.floor(durationMinutes / 60);
+                        const mins = durationMinutes % 60;
+                        if (mins === 0) {
+                            durationText = `${hours} hour${hours > 1 ? 's' : ''}`;
+                        } else {
+                            durationText = `${hours} hour${hours > 1 ? 's' : ''} ${mins} minutes`;
+                        }
+                    }
+                    
+                    document.getElementById('duration-text-edit').textContent = durationText;
+                    document.getElementById('duration-display-edit').style.display = 'block';
                     
                     openModal('editScheduleModal');
                 })
@@ -336,6 +668,30 @@ let currentSectionId = null;
 
         function submitEditSchedule(event) {
             event.preventDefault();
+            
+            // Validate times before submitting
+            const startTimeEdit = document.getElementById('edit_start_time').value;
+            const endTimeEdit = document.getElementById('edit_end_time').value;
+            
+            if (!startTimeEdit || !endTimeEdit) {
+                showAlert('Please select both start and end times', 'error');
+                return;
+            }
+            
+            if (startTimeEdit >= endTimeEdit) {
+                showAlert('End time must be after start time', 'error');
+                return;
+            }
+            
+            if (startTimeEdit < '07:30' || startTimeEdit > '21:30') {
+                showAlert('Start time must be between 7:30 AM and 9:30 PM', 'error');
+                return;
+            }
+            if (endTimeEdit < '07:30' || endTimeEdit > '21:30') {
+                showAlert('End time must be between 7:30 AM and 9:30 PM', 'error');
+                return;
+            }
+            
             const formData = new FormData(event.target);
             const scheduleId = document.getElementById('edit_schedule_id').value;
             
@@ -418,8 +774,10 @@ let currentSectionId = null;
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
+                        currentSchedules = data.schedules; // Store schedules for duplicate check
                         renderScheduleGrid(data.schedules);
                         renderCoursesSidebar(data.courses);
+                        filterAvailableInstructors('faculty_select');
                     } else {
                         console.error('Error loading schedule:', data.error);
                         showAlert('Error loading schedule data', 'error');
@@ -935,6 +1293,11 @@ let currentSectionId = null;
 
             document.getElementById(currentTimeField).value = time24;
             document.getElementById(`${currentTimeField}_display`).textContent = display;
+            if (currentTimeField.startsWith('edit_')) {
+                filterAvailableInstructors('edit_faculty_select');
+            } else {
+                filterAvailableInstructors('faculty_select');
+            }
             closeTimePicker();
         }
 
@@ -950,6 +1313,14 @@ let currentSectionId = null;
             if (p === 'PM' && h12 !== 12) h += 12;
             if (p === 'AM' && h12 === 12) h = 0;
             return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+        }
+
+        function setTimeDisplay(fieldId) {
+            const input = document.getElementById(fieldId);
+            const display = document.getElementById(`${fieldId}_display`);
+            if (!input || !display) return;
+            const [time12, period] = convertTo12Hour(input.value || '07:30');
+            display.textContent = `${time12} ${period}`;
         }
 
         // Utility functions

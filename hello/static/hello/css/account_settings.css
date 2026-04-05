@@ -136,10 +136,6 @@
     background-color: rgba(0, 0, 0, 0.02);
 }
 
-.form-row input[type="password"] {
-    padding-right: 48px;
-}
-
 .password-input-wrapper {
     position: relative;
     display: flex;

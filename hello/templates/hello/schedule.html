@@ -266,13 +266,7 @@
             
             <!-- Tab Navigation -->
             <div class="tab-navigation">
-                <button class="tab-btn active" onclick="switchTab('generate')">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18">
-                        <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5-9h3.5v7H9V11zm6-3h1.5v10H15V8z"/>
-                    </svg>
-                    Generate
-                </button>
-                <button class="tab-btn" onclick="switchTab('manual')">
+                <button class="tab-btn active" onclick="switchTab('manual')">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18">
                         <path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
                     </svg>
@@ -280,60 +274,13 @@
                 </button>
             </div>
 
-            <!-- Generate Tab Content -->
-            <div id="generateTab" class="tab-content active">
-                <form id="generateScheduleForm" onsubmit="submitGenerateSchedule(event)">
-                    {% csrf_token %}
-                    <div class="form-group">
-                        <label>Section</label>
-                        <select name="section" id="generate_section_select" required onchange="updateGenerateFilters()">
-                            <option value="">Select a section...</option>
-                            {% for section in section_list %}
-                            <option value="{{ section.id }}" 
-                                    data-curriculum="{{ section.curriculum.name }} ({{ section.curriculum.year }})"
-                                    data-year="{{ section.year_level }}"
-                                    data-semester="{{ section.semester }}">
-                                {{ section.name }} - {% if section.year_level == 1 %}1st{% elif section.year_level == 2 %}2nd{% elif section.year_level == 3 %}3rd{% else %}4th{% endif %} Year, {% if section.semester == 1 %}1st{% else %}2nd{% endif %} Semester
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Curriculum</label>
-                            <input type="text" id="generate_curriculum_display" class="form-control" readonly placeholder="Auto-filled" style="background-color: #F8F9FA; cursor: not-allowed;">
-                        </div>
-                        <div class="form-group">
-                            <label>Year Level</label>
-                            <input type="text" id="generate_year_display" class="form-control" readonly placeholder="Auto-filled" style="background-color: #F8F9FA; cursor: not-allowed;">
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Semester</label>
-                        <input type="text" id="generate_semester_display" class="form-control" readonly placeholder="Auto-filled" style="background-color: #F8F9FA; cursor: not-allowed;">
-                    </div>
-                    
-                    <div class="modal-footer">
-                        <button type="button" class="btn-secondary" onclick="closeModal('scheduleModal')">Cancel</button>
-                        <button type="submit" class="btn-primary">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18">
-                                <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5-9h3.5v7H9V11zm6-3h1.5v10H15V8z"/>
-                            </svg>
-                            Generate Schedule
-                        </button>
-                    </div>
-                </form>
-            </div>
-
             <!-- Manual Tab Content -->
-            <div id="manualTab" class="tab-content">
+            <div id="manualTab" class="tab-content active">
                 <form id="createScheduleForm" onsubmit="submitCreateSchedule(event)">
                     {% csrf_token %}
                     <div class="form-group">
                         <label>Course Code</label>
-                        <select name="course" id="course_select" required>
+                        <select name="course" id="course_select" required onchange="filterAvailableDays()">
                             <option value="">Select a course...</option>
                             {% for course in all_courses %}
                             <option value="{{ course.id }}">{{ course.course_code }} - {{ course.descriptive_title }}</option>
@@ -342,7 +289,7 @@
                     </div>
                     <div class="form-group">
                         <label>Instructor</label>
-                        <select name="faculty" required>
+                        <select name="faculty" id="faculty_select" required>
                             <option value="">Select an instructor...</option>
                             {% for faculty in faculty_list %}
                             <option value="{{ faculty.id }}">{{ faculty.last_name }}, {{ faculty.first_name }}</option>
@@ -351,16 +298,16 @@
                     </div>
                     <div class="form-group">
                         <label>Section</label>
-                        <select name="section" required>
+                        <select name="section" id="section_select" required onchange="handleSectionSelectChange()">
                             <option value="">Select a section...</option>
                             {% for section in section_list %}
-                            <option value="{{ section.id }}">{{ section.name }} - {% if section.year_level == 1 %}1st{% elif section.year_level == 2 %}2nd{% elif section.year_level == 3 %}3rd{% else %}4th{% endif %} Year, {% if section.semester == 1 %}1st{% else %}2nd{% endif %} Semester</option>
+                            <option value="{{ section.id }}" data-section-name="{{ section.name }}" data-section-curriculum="{{ section.curriculum.name }} ({{ section.curriculum.year }})">{{ section.name }} - {% if section.year_level == 1 %}1st{% elif section.year_level == 2 %}2nd{% elif section.year_level == 3 %}3rd{% else %}4th{% endif %} Year, {% if section.semester == 1 %}1st{% else %}2nd{% endif %} Semester</option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Room</label>
-                        <select name="room" required>
+                        <select name="room" id="room_select" required>
                             <option value="">Select a room...</option>
                             {% for room in room_list %}
                             <option value="{{ room.id }}">{{ room.get_room_type_display }}: {% if room.campus == 'arlegui' %}A{% else %}C{% endif %}-{{ room.room_number }}</option>
@@ -369,7 +316,7 @@
                     </div>
                     <div class="form-group">
                         <label>Day</label>
-                        <select name="day" required>
+                        <select name="day" id="day_select" required onchange="filterAvailableInstructors('faculty_select')">
                             <option value="">Select a day...</option>
                             <option value="0">Monday</option>
                             <option value="1">Tuesday</option>
@@ -381,25 +328,28 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Start Time</label>
-                            <div class="time-input-trigger" onclick="openTimePicker('start_time')">
-                                <span class="time-display" id="start_time_display">07:30 AM</span>
-                                <svg class="time-picker-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                                    <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
-                                </svg>
+                            <label>Start Time <span class="time-constraint">(7:30 AM - 9:30 PM)</span></label>
+                            <div class="time-picker-wrapper">
+                                <input type="hidden" name="start_time" id="start_time" value="07:30" required>
+                                <div class="time-picker-display" onclick="openTimePicker('start_time')">
+                                    <span id="start_time_display">07:30 AM</span>
+                                </div>
                             </div>
-                            <input type="hidden" name="start_time" id="start_time" value="07:30" required>
+                            <small class="form-hint">Scroll or tap to pick the nearest value</small>
                         </div>
                         <div class="form-group">
-                            <label>End Time</label>
-                            <div class="time-input-trigger" onclick="openTimePicker('end_time')">
-                                <span class="time-display" id="end_time_display">08:30 AM</span>
-                                <svg class="time-picker-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                                    <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
-                                </svg>
+                            <label>End Time <span class="time-constraint">(7:30 AM - 9:30 PM)</span></label>
+                            <div class="time-picker-wrapper">
+                                <input type="hidden" name="end_time" id="end_time" value="08:30" required>
+                                <div class="time-picker-display" onclick="openTimePicker('end_time')">
+                                    <span id="end_time_display">08:30 AM</span>
+                                </div>
                             </div>
-                            <input type="hidden" name="end_time" id="end_time" value="08:30" required>
+                            <small class="form-hint">Must be after start time</small>
                         </div>
+                    </div>
+                    <div id="duration-display" class="duration-info" style="display:none; padding: 12px; background-color: #e8f5e9; border-radius: 4px; margin: 10px 0; color: #2e7d32; font-weight: 500;">
+                        Duration: <span id="duration-text">1 hour</span>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn-secondary" onclick="closeModal('scheduleModal')">Cancel</button>
@@ -454,7 +404,7 @@
                 </div>
                 <div class="form-group">
                     <label>Day</label>
-                    <select name="day" id="edit_day_select" required>
+                    <select name="day" id="edit_day_select" required onchange="filterAvailableInstructors('edit_faculty_select')">
                         <option value="">Select a day...</option>
                         <option value="0">Monday</option>
                         <option value="1">Tuesday</option>
@@ -466,25 +416,28 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Start Time</label>
-                        <div class="time-input-trigger" onclick="openTimePicker('edit_start_time')">
-                            <span class="time-display" id="edit_start_time_display">07:30 AM</span>
-                            <svg class="time-picker-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                                <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
-                            </svg>
+                        <label>Start Time <span class="time-constraint">(7:30 AM - 9:30 PM)</span></label>
+                        <div class="time-picker-wrapper">
+                            <input type="hidden" name="start_time" id="edit_start_time" value="07:30" required>
+                            <div class="time-picker-display" onclick="openTimePicker('edit_start_time')">
+                                <span id="edit_start_time_display">07:30 AM</span>
+                            </div>
                         </div>
-                        <input type="hidden" name="start_time" id="edit_start_time" value="07:30" required>
+                        <small class="form-hint">Tap to select start time</small>
                     </div>
                     <div class="form-group">
-                        <label>End Time</label>
-                        <div class="time-input-trigger" onclick="openTimePicker('edit_end_time')">
-                            <span class="time-display" id="edit_end_time_display">08:30 AM</span>
-                            <svg class="time-picker-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                                <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
-                            </svg>
+                        <label>End Time <span class="time-constraint">(7:30 AM - 9:30 PM)</span></label>
+                        <div class="time-picker-wrapper">
+                            <input type="hidden" name="end_time" id="edit_end_time" value="08:30" required>
+                            <div class="time-picker-display" onclick="openTimePicker('edit_end_time')">
+                                <span id="edit_end_time_display">08:30 AM</span>
+                            </div>
                         </div>
-                        <input type="hidden" name="end_time" id="edit_end_time" value="08:30" required>
+                        <small class="form-hint">Tap to select end time</small>
                     </div>
+                </div>
+                <div id="duration-display-edit" class="duration-info" style="display:none; padding: 12px; background-color: #e8f5e9; border-radius: 4px; margin: 10px 0; color: #2e7d32; font-weight: 500;">
+                    Duration: <span id="duration-text-edit">1 hour</span>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn-delete" onclick="deleteScheduleFromEdit()">

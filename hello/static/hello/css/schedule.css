@@ -995,6 +995,86 @@ body {
     font-family: 'Lexend', sans-serif;
 }
 
+.time-picker-wrapper {
+    position: relative;
+}
+
+.time-wheel {
+    display: flex;
+    gap: 10px;
+    background-color: #F8FAFC;
+    border: 1px solid #D1D1D1;
+    border-radius: 12px;
+    padding: 12px;
+    overflow: hidden;
+}
+
+.picker-column {
+    flex: 1;
+    max-height: 210px;
+    overflow-y: auto;
+    scroll-snap-type: y mandatory;
+    padding: 6px 0;
+    position: relative;
+    background-color: #FFFFFF;
+    border-radius: 12px;
+    border: 1px solid #E5E7EB;
+}
+
+.picker-column::-webkit-scrollbar {
+    width: 6px;
+}
+
+.picker-column::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 999px;
+}
+
+.picker-item {
+    scroll-snap-align: center;
+    text-align: center;
+    padding: 12px 4px;
+    font-family: 'Lexend', sans-serif;
+    font-size: 0.95rem;
+    color: #4B5563;
+    transition: all 0.2s ease;
+}
+
+.picker-item.selected,
+.picker-item:hover {
+    background-color: #F1F5F9;
+    color: #111827;
+    font-weight: 700;
+    border-radius: 999px;
+}
+
+.time-wheel-center-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 56px;
+    border-top: 1px solid rgba(15, 23, 42, 0.08);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    pointer-events: none;
+}
+
+.time-wheel .picker-column {
+    position: relative;
+    flex: 1;
+}
+
+.time-wheel .picker-column::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 56px;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
 /* Toggle switch style (like "Set time automatically" toggle) */
 .toggle-group {
     display: flex;
@@ -1212,7 +1292,7 @@ input:checked + .toggle-slider:before {
     left: 0;
     right: 0;
     height: 40px;
-    background: #E8F0FE;
+    background: #E5E7EB;
     transform: translateY(-50%);
     z-index: 1;
     pointer-events: none;
@@ -1271,13 +1351,32 @@ input:checked + .toggle-slider:before {
 }
 
 .time-picker-item.selected {
-    color: #0078D4;
+    color: #111827;
     font-weight: 600;
-    background: #E8F0FE;
+    background: #E5E7EB;
 }
 
 .time-picker-item:hover {
     background: #F5F5F5;
+}
+
+.time-picker-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 46px;
+    padding: 10px 14px;
+    background: #FFFFFF;
+    border: 1px solid #D1D5DB;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+    color: #111827;
+}
+
+.time-picker-display:hover {
+    background: #F9FAFB;
+    border-color: #CBD5E1;
 }
 
 /* Time picker modal */
@@ -2060,3 +2159,30 @@ input:checked + .toggle-slider:before {
 .schedule-block:active {
     transform: translateY(0);
 }
+
+/* New Manual Scheduling Improvements */
+
+/* Time constraint label in form */
+.time-constraint {
+    font-size: 0.85rem;
+    color: #6c757d;
+    font-weight: 400;
+}
+
+/* Duration display */
+.duration-info {
+    text-align: center;
+    border-left: 4px solid #4caf50;
+    display: none !important;
+}
+
+/* Form hint text */
+.form-hint {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.8rem;
+    color: #6c757d;
+    font-weight: 300;
+}
+
+/* Improved time input styling */
