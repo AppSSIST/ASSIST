@@ -740,12 +740,22 @@
             
             fetch('/admin/faculty/add/', {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: {
-                    'X-CSRFToken': getCookie('csrftoken')
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Accept': 'application/json'
                 },
                 body: formData,
             })
-            .then(response => response.json())
+            .then(response => {
+                return response.text().then(text => {
+                    try {
+                        return JSON.parse(text);
+                    } catch (err) {
+                        throw new Error(`Server returned non-JSON response (${response.status}): ${text}`);
+                    }
+                });
+            })
             .then(data => {
                 if (data.success) {
                     showNotification(data.message || 'Faculty added successfully!', 'success');
@@ -772,12 +782,22 @@
             
             fetch(`/admin/faculty/edit/${facultyId}/`, {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: {
-                    'X-CSRFToken': getCookie('csrftoken')
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Accept': 'application/json'
                 },
                 body: formData,
             })
-            .then(response => response.json())
+            .then(response => {
+                return response.text().then(text => {
+                    try {
+                        return JSON.parse(text);
+                    } catch (err) {
+                        throw new Error(`Server returned non-JSON response (${response.status}): ${text}`);
+                    }
+                });
+            })
             .then(data => {
                 if (data.success) {
                     showNotification('Faculty updated successfully!', 'success');
