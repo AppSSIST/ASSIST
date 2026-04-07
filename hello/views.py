@@ -516,6 +516,8 @@ ASSIST Administration Team'''
                     }
                 )
 
+                print(f"Resend API response: {response.status_code} - {response.text}")
+
                 if response.status_code == 200:
                     email_sent = True
                     message_text = f'Faculty added successfully. An invitation email has been sent to {email}.'
