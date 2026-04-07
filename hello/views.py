@@ -384,8 +384,6 @@ def faculty_view(request):
     
     return render(request, 'hello/faculty.html', context)
 
-@login_required(login_url='admin_login')
-@user_passes_test(is_admin, login_url='admin_login')
 def add_faculty(request):
     """Add new faculty member with proper email validation and sending"""
     if request.method == 'POST':
