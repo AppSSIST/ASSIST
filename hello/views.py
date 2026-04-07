@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail, EmailMessage
+from django.core.mail import send_mail, EmailMessage, get_connection
 from django.conf import settings
 from django.db.models import Sum, Q
 from django.urls import reverse
@@ -505,17 +505,27 @@ If you did not request this account, please contact the administrator immediatel
 Best regards,
 ASSIST Administration Team'''
 
+                    connection = get_connection(
+                        fail_silently=True,
+                        timeout=settings.EMAIL_TIMEOUT,
+                    )
                     email_message = EmailMessage(
                         subject=subject,
                         body=message,
                         from_email=settings.DEFAULT_FROM_EMAIL,
                         to=[email],
+                        connection=connection,
                     )
 
-                    email_message.send(fail_silently=False)
-
-                    email_sent = True
-                    message_text = f'Faculty added successfully. An invitation email has been sent to {email}.'
+                    if email_message.send(fail_silently=True):
+                        email_sent = True
+                        message_text = f'Faculty added successfully. An invitation email has been sent to {email}.'
+                    else:
+                        email_sent = False
+                        message_text = (
+                            'Faculty added successfully, but email could not be sent. '
+                            'Please check your SMTP settings and provide credentials manually.'
+                        )
 
                 except Exception as e:
                     print(f"Error sending email: {str(e)}")
