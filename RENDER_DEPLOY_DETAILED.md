@@ -7,7 +7,7 @@ Make sure these files are in your project root:
 - `requirements.txt` ✅
 - `manage.py` ✅
 - `Procfile` ✅ (already created)
-- `render.yaml` ✅ (already created)
+- `render.yaml` ✅ (already crreated)
 
 ### Step 2: Add missing dependency
 Run in PowerShell (in your project folder):
