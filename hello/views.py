@@ -8,6 +8,7 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail, EmailMessage, get_connection
+import requests
 from django.conf import settings
 from django.db.models import Sum, Q
 from django.urls import reverse
@@ -474,22 +475,16 @@ def add_faculty(request):
                 courses = Course.objects.filter(id__in=specialization_ids)
                 faculty.specialization.set(courses)
             
-            # Send email with a password reset invitation link instead of plain text credentials
+            # Send email with a password reset invitation link using Resend API
             email_sent = False
-            if not settings.EMAIL_HOST_USER or not settings.EMAIL_HOST_PASSWORD:
-                message_text = (
-                    'Faculty added successfully, but email was not sent because SMTP login is not configured. '
-                    'Add EMAIL_HOST_USER and EMAIL_HOST_PASSWORD in your environment variables.'
-                )
-            else:
-                try:
-                    uid = urlsafe_base64_encode(force_bytes(user.pk))
-                    token = default_token_generator.make_token(user)
-                    reset_path = reverse('password_reset_confirm', kwargs={'uidb64': uid, 'token': token})
-                    reset_url = request.build_absolute_uri(reset_path)
+            try:
+                uid = urlsafe_base64_encode(force_bytes(user.pk))
+                token = default_token_generator.make_token(user)
+                reset_path = reverse('password_reset_confirm', kwargs={'uidb64': uid, 'token': token})
+                reset_url = request.build_absolute_uri(reset_path)
 
-                    subject = 'Your ASSIST Account Invitation'
-                    message = f'''Hello {first_name},
+                subject = 'Your ASSIST Account Invitation'
+                message = f'''Hello {first_name},
 
 Your ASSIST account has been created successfully.
 
@@ -505,35 +500,39 @@ If you did not request this account, please contact the administrator immediatel
 Best regards,
 ASSIST Administration Team'''
 
-                    connection = get_connection(
-                        fail_silently=True,
-                        timeout=settings.EMAIL_TIMEOUT,
-                    )
-                    email_message = EmailMessage(
-                        subject=subject,
-                        body=message,
-                        from_email=settings.DEFAULT_FROM_EMAIL,
-                        to=[email],
-                        connection=connection,
-                    )
+                # Use Resend API to send email
+                resend_api_key = settings.EMAIL_HOST_PASSWORD  # The API key is in EMAIL_HOST_PASSWORD
+                response = requests.post(
+                    'https://api.resend.com/emails',
+                    headers={
+                        'Authorization': f'Bearer {resend_api_key}',
+                        'Content-Type': 'application/json'
+                    },
+                    json={
+                        'from': settings.DEFAULT_FROM_EMAIL,
+                        'to': [email],
+                        'subject': subject,
+                        'text': message
+                    }
+                )
 
-                    if email_message.send(fail_silently=True):
-                        email_sent = True
-                        message_text = f'Faculty added successfully. An invitation email has been sent to {email}.'
-                    else:
-                        email_sent = False
-                        message_text = (
-                            'Faculty added successfully, but email could not be sent. '
-                            'Please check your SMTP settings and provide credentials manually.'
-                        )
-
-                except Exception as e:
-                    print(f"Error sending email: {str(e)}")
+                if response.status_code == 200:
+                    email_sent = True
+                    message_text = f'Faculty added successfully. An invitation email has been sent to {email}.'
+                else:
                     email_sent = False
                     message_text = (
                         'Faculty added successfully, but email could not be sent. '
-                        'Please check your SMTP settings and provide credentials manually.'
+                        'Please check your Resend API key and settings.'
                     )
+
+            except Exception as e:
+                print(f"Error sending email: {str(e)}")
+                email_sent = False
+                message_text = (
+                    'Faculty added successfully, but email could not be sent. '
+                    'Please check your Resend API key and settings.'
+                )
             
             # Log activity
             log_activity(
