@@ -40,7 +40,11 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-uts54#%bbb5=2kq!x7r1_
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = ['auto-scheduling-5.onrender.com', 'localhost', '127.0.0.1', 'testserver']
+ALLOWED_HOSTS = config(
+    'ALLOWED_HOSTS',
+    default='auto-scheduling-7.onrender.com,localhost,127.0.0.1,testserver',
+)
+ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS.split(',') if host.strip()]
 
 
 # Application definition
