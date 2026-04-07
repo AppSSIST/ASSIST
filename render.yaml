@@ -1,3 +1,4 @@
+# Force rebuild 2026-04-07
 services:
   - type: web
     name: auto-scheduling
@@ -26,4 +27,4 @@ if u and p:
 databases:
   - name: auto_scheduling_db
     databaseName: auto_scheduling
-    user: postgres_user
+    user: postgres_user # Force Rebuild
