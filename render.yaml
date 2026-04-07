@@ -3,7 +3,7 @@ services:
     name: auto-scheduling
     env: python
     pythonVersion: 3.11
-    region: oregon
+    region: frankfurt
     plan: free
     buildCommand: pip install -r requirements.txt && python manage.py migrate && python manage.py collectstatic --noinput && python -c "import os, django; os.environ.setdefault('DJANGO_SETTINGS_MODULE','ASSIST.settings'); django.setup(); from django.contrib.auth import get_user_model; User=get_user_model(); u=os.getenv('DJANGO_SUPERUSER_USERNAME'); p=os.getenv('DJANGO_SUPERUSER_PASSWORD'); e=os.getenv('DJANGO_SUPERUSER_EMAIL',''); print('BUILD-SUPERUSER', bool(u), bool(p), bool(e));
 if u and p:
