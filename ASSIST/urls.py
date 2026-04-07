@@ -7,6 +7,9 @@ from hello import views
 urlpatterns = [
     # Custom admin login - MUST be first!
     path('admin/login/', views.admin_login, name='admin_login'),
+
+    # Root URL should go to login so users land on the login page
+    path('', views.admin_login, name='home'),
     
     # Django default admin (different URL)
     path('django-admin/', admin.site.urls),
