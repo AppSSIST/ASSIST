@@ -389,6 +389,12 @@ def faculty_view(request):
 def add_faculty(request):
     """Add new faculty member with proper email validation and sending"""
     if request.method == 'POST':
+        if not request.user.is_authenticated or not is_admin(request.user):
+            return JsonResponse({
+                'success': False,
+                'errors': ['Authentication required. Please login again and try.']
+            }, status=401)
+
         try:
             # Get form data
             first_name = request.POST.get('first_name')
@@ -471,14 +477,21 @@ def add_faculty(request):
                 faculty.specialization.set(courses)
             
             # Send email with a password reset invitation link instead of plain text credentials
-            try:
-                uid = urlsafe_base64_encode(force_bytes(user.pk))
-                token = default_token_generator.make_token(user)
-                reset_path = reverse('password_reset_confirm', kwargs={'uidb64': uid, 'token': token})
-                reset_url = request.build_absolute_uri(reset_path)
+            email_sent = False
+            if not settings.EMAIL_HOST_USER or not settings.EMAIL_HOST_PASSWORD:
+                message_text = (
+                    'Faculty added successfully, but email was not sent because SMTP login is not configured. '
+                    'Add EMAIL_HOST_USER and EMAIL_HOST_PASSWORD in your environment variables.'
+                )
+            else:
+                try:
+                    uid = urlsafe_base64_encode(force_bytes(user.pk))
+                    token = default_token_generator.make_token(user)
+                    reset_path = reverse('password_reset_confirm', kwargs={'uidb64': uid, 'token': token})
+                    reset_url = request.build_absolute_uri(reset_path)
 
-                subject = 'Your ASSIST Account Invitation'
-                message = f'''Hello {first_name},
+                    subject = 'Your ASSIST Account Invitation'
+                    message = f'''Hello {first_name},
 
 Your ASSIST account has been created successfully.
 
@@ -494,22 +507,25 @@ If you did not request this account, please contact the administrator immediatel
 Best regards,
 ASSIST Administration Team'''
 
-                email_message = EmailMessage(
-                    subject=subject,
-                    body=message,
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    to=[email],
-                )
+                    email_message = EmailMessage(
+                        subject=subject,
+                        body=message,
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        to=[email],
+                    )
 
-                email_message.send(fail_silently=False)
+                    email_message.send(fail_silently=False)
 
-                email_sent = True
-                message_text = f'Faculty added successfully. An invitation email has been sent to {email}.'
+                    email_sent = True
+                    message_text = f'Faculty added successfully. An invitation email has been sent to {email}.'
 
-            except Exception as e:
-                print(f"Error sending email: {str(e)}")
-                email_sent = False
-                message_text = f'Faculty added successfully, but email could not be sent. Please provide credentials manually:\nUsername: {username}\nPassword: {password}'
+                except Exception as e:
+                    print(f"Error sending email: {str(e)}")
+                    email_sent = False
+                    message_text = (
+                        'Faculty added successfully, but email could not be sent. '
+                        'Please check your SMTP settings and provide credentials manually.'
+                    )
             
             # Log activity
             log_activity(
