@@ -25,17 +25,19 @@ services:
       - key: EMAIL_BACKEND
         value: "django.core.mail.backends.smtp.EmailBackend"
       - key: EMAIL_HOST
-        value: "smtp.gmail.com"
+        value: "smtp.resend.com"
       - key: EMAIL_PORT
         value: "587"
       - key: EMAIL_USE_TLS
         value: "True"
       - key: EMAIL_HOST_USER
-        value: ""
+        value: "resend"
       - key: EMAIL_HOST_PASSWORD
-        value: ""
+        value: "re_VwrppCai_PA6bhEJuBxq5DzhoBD17J9wq"
+      - key: EMAIL_TIMEOUT
+        value: "10"
       - key: DEFAULT_FROM_EMAIL
-        value: ""
+        value: "msnbaldonado@tip.edu.ph"  # Updated to your real sender email
 
 databases:
   - name: auto_scheduling_db
