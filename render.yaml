@@ -7,7 +7,11 @@ services:
     region: oregon
     plan: free
     buildCommand: |
-      pip install -r requirements.txt && python manage.py migrate && python manage.py collectstatic --noinput && python - <<'PY'
+      set -e
+      pip install -r requirements.txt
+      python manage.py migrate
+      python manage.py collectstatic --noinput
+      python - <<'PY'
       import os, django
       os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ASSIST.settings')
       django.setup()
