@@ -6,11 +6,16 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
+from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail, EmailMessage
 from django.conf import settings
 from django.db.models import Sum, Q
+from django.urls import reverse
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 from datetime import datetime, timedelta
 import random
+import re
 import string
 from .models import Course, Curriculum, Activity, Faculty, Section, Schedule, Room
 from .forms import CourseForm, CurriculumForm
@@ -410,26 +415,26 @@ def add_faculty(request):
                     'errors': ['This email is already registered.']
                 })
             
-            # Generate random password
+# Generate random password for initial account creation
             password = generate_password()
-            
-            # Create User account
-            username = f"{first_name.lower()}.{last_name.lower()}"
-            base_username = username
+
+            # Build a sanitized username and ensure uniqueness
+            base_username = f"{first_name.strip().lower().replace(' ', '')}.{last_name.strip().lower().replace(' ', '')}"
+            base_username = re.sub(r'[^a-z0-9._-]', '', base_username)
+            username = base_username
             counter = 1
-            
-            # Ensure unique username
+
             while User.objects.filter(username=username).exists():
                 username = f"{base_username}{counter}"
                 counter += 1
-            
+
             # Check if email already used by another user
             if User.objects.filter(email=email).exists():
                 return JsonResponse({
                     'success': False,
                     'errors': ['This email is already associated with another account.']
                 })
-            
+
             user = User.objects.create_user(
                 username=username,
                 email=email,
@@ -465,22 +470,26 @@ def add_faculty(request):
                 courses = Course.objects.filter(id__in=specialization_ids)
                 faculty.specialization.set(courses)
             
-            # Send email with credentials using EmailMessage for better control
+            # Send email with a password reset invitation link instead of plain text credentials
             try:
-                subject = 'Your ASSIST Account Credentials'
+                uid = urlsafe_base64_encode(force_bytes(user.pk))
+                token = default_token_generator.make_token(user)
+                reset_path = reverse('password_reset_confirm', kwargs={'uidb64': uid, 'token': token})
+                reset_url = request.build_absolute_uri(reset_path)
+
+                subject = 'Your ASSIST Account Invitation'
                 message = f'''Hello {first_name},
 
-Your account has been created successfully for the ASSIST system.
+Your ASSIST account has been created successfully.
 
-Login Credentials:
-------------------
 Username: {username}
-Password: {password}
-Role: {role.capitalize()}
 
-Please login to the system and change your password immediately for security purposes.
+To complete your account setup and choose a secure password, click the link below:
+{reset_url}
 
-If you did not request this account, please contact the administrator.
+If you cannot click the link, copy and paste it into your browser.
+
+If you did not request this account, please contact the administrator immediately.
 
 Best regards,
 ASSIST Administration Team'''
@@ -491,12 +500,12 @@ ASSIST Administration Team'''
                     from_email=settings.DEFAULT_FROM_EMAIL,
                     to=[email],
                 )
-                
+
                 email_message.send(fail_silently=False)
-                
+
                 email_sent = True
-                message_text = f'Faculty added successfully. Credentials have been sent to {email}'
-                
+                message_text = f'Faculty added successfully. An invitation email has been sent to {email}.'
+
             except Exception as e:
                 print(f"Error sending email: {str(e)}")
                 email_sent = False
