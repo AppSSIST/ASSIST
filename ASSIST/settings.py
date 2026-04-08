@@ -42,9 +42,10 @@ DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = config(
     'ALLOWED_HOSTS',
-    default='auto-scheduling-7.onrender.com,localhost,127.0.0.1,testserver',
+    default='auto-scheduling-7.onrender.com,localhost,127.0.0.1,testserver,10.0.2.2',
 )
 ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS.split(',') if host.strip()]
+
 
 
 # Application definition

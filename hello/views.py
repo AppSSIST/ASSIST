@@ -20,6 +20,10 @@ import re
 import string
 from .models import Course, Curriculum, Activity, Faculty, Section, Schedule, Room
 from .forms import CourseForm, CurriculumForm
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
 
 # Helper function to check if user is admin
 def is_admin(user):
@@ -2506,28 +2510,34 @@ def save_account_settings(request):
         }, status=500)
 
 
-@login_required
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def get_user_faculty_data(request):
-    """API endpoint to fetch current user's faculty data for account settings"""
+    """API endpoint to fetch current user's faculty data for the Android App"""
     try:
         faculty = Faculty.objects.get(user=request.user)
-        profile_pic_url = faculty.profile_picture.url if faculty.profile_picture else None
-        return JsonResponse({
+        
+        # Build full URL so the app can find the image (http://10.0.2.2:8000/media/...)
+        profile_pic_url = None
+        if faculty.profile_picture:
+            profile_pic_url = request.build_absolute_uri(faculty.profile_picture.url)
+
+        return Response({
             'first_name': faculty.first_name,
             'last_name': faculty.last_name,
             'email': faculty.email,
             'gender': faculty.gender or '',
             'profile_picture_url': profile_pic_url,
-        })
+        }, status=status.HTTP_200_OK)
+
     except Faculty.DoesNotExist:
-        # User is an admin without a faculty profile
-        return JsonResponse({
+        return Response({
             'first_name': request.user.first_name,
             'last_name': request.user.last_name,
             'email': request.user.email,
             'gender': '',
             'profile_picture_url': None,
-        })
+        }, status=status.HTTP_200_OK)
 
 def api_password_reset(request):
     """API endpoint to send password reset email"""
@@ -2648,83 +2658,102 @@ def api_password_reset_confirm(request):
 
     return JsonResponse({'error': 'Method not allowed'}, status=405)
 
-@login_required(login_url='admin_login')
-@user_passes_test(is_admin, login_url='admin_login')
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def get_available_resources(request):
     """API endpoint to get available faculty and rooms for a given time slot"""
-    if request.method == 'GET':
+    try:
+        # Get data from request.query_params (standard for GET in DRF)
+        day = request.query_params.get('day')
+        start_time = request.query_params.get('start_time')
+        end_time = request.query_params.get('end_time')
+
+        if not all([day, start_time, end_time]):
+            return Response({'error': 'day, start_time, and end_time are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Convert day name to integer if needed
+        day_mapping = {'Monday': 0, 'Tuesday': 1, 'Wednesday': 2, 'Thursday': 3, 'Friday': 4, 'Saturday': 5}
+        
         try:
-            day = request.GET.get('day')
-            start_time = request.GET.get('start_time')
-            end_time = request.GET.get('end_time')
+            day_val = day_mapping[day] if day in day_mapping else int(day)
+        except (ValueError, TypeError):
+            return Response({'error': 'Invalid day format'}, status=status.HTTP_400_BAD_REQUEST)
 
-            if not all([day, start_time, end_time]):
-                return JsonResponse({'error': 'day, start_time, and end_time are required'}, status=400)
+        # Filter logic
+        all_faculty = Faculty.objects.all().order_by('last_name', 'first_name')
+        all_rooms = Room.objects.all().order_by('campus', 'room_number')
 
-            # Convert day name to integer if needed
-            day_mapping = {
-                'Monday': 0,
-                'Tuesday': 1,
-                'Wednesday': 2,
-                'Thursday': 3,
-                'Friday': 4,
-                'Saturday': 5
-            }
-            
-            if day in day_mapping:
-                day = day_mapping[day]
-            else:
-                day = int(day)
+        available_faculty = []
+        for f in all_faculty:
+            if not Schedule.objects.filter(faculty=f, day=day_val, start_time__lt=end_time, end_time__gt=start_time).exists():
+                available_faculty.append({'id': f.id, 'name': f"{f.last_name}, {f.first_name}", 'email': f.email})
 
-            # Get all faculty and rooms
-            all_faculty = Faculty.objects.all().order_by('last_name', 'first_name')
-            all_rooms = Room.objects.all().order_by('campus', 'room_number')
+        available_rooms = []
+        for r in all_rooms:
+            if not Schedule.objects.filter(room=r, day=day_val, start_time__lt=end_time, end_time__gt=start_time).exists():
+                available_rooms.append({
+                    'id': r.id, 
+                    'name': f"{r.get_room_type_display()}: {'A' if r.campus == 'arlegui' else 'C'}-{r.room_number}",
+                    'capacity': r.capacity
+                })
 
-            # Filter out faculty with conflicts
-            available_faculty = []
-            for faculty in all_faculty:
-                has_conflict = Schedule.objects.filter(
-                    faculty=faculty,
-                    day=day,
-                    start_time__lt=end_time,
-                    end_time__gt=start_time
-                ).exists()
+        return Response({
+            'success': True,
+            'faculty': available_faculty,
+            'rooms': available_rooms
+        }, status=status.HTTP_200_OK)
 
-                if not has_conflict:
-                    available_faculty.append({
-                        'id': faculty.id,
-                        'name': f"{faculty.last_name}, {faculty.first_name}",
-                        'email': faculty.email
-                    })
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # Filter out rooms with conflicts
-            available_rooms = []
-            for room in all_rooms:
-                has_conflict = Schedule.objects.filter(
-                    room=room,
-                    day=day,
-                    start_time__lt=end_time,
-                    end_time__gt=start_time
-                ).exists()
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_dashboard_stats(request):
+    data = {
+        "faculty_count": Faculty.objects.count(),
+        "section_count": Section.objects.count()
+    }
+    return Response(data)
 
-                if not has_conflict:
-                    available_rooms.append({
-                        'id': room.id,
-                        'name': f"{room.get_room_type_display()}: {'A' if room.campus == 'arlegui' else 'C'}-{room.room_number}",
-                        'campus': room.campus,
-                        'room_type': room.room_type,
-                        'capacity': room.capacity
-                    })
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_curriculums(request):
+    curriculums = Curriculum.objects.all().order_by('-year')
+    data = [{"id": c.id, "name": c.name, "year": c.year} for c in curriculums]
+    return Response(data)
 
-            return JsonResponse({
-                'success': True,
-                'faculty': available_faculty,
-                'rooms': available_rooms
-            })
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_sections(request):
+    sections = Section.objects.all()
+    data = [{
+        "id": s.id, 
+        "name": s.name, 
+        "year_level": s.year_level, 
+        "semester": s.semester, 
+        "status": s.status,
+        "curriculum": s.curriculum.id
+    } for s in sections]
+    return Response(data)
 
-        except Exception as e:
-            print(f"Error in get_available_resources: {str(e)}")
-            return JsonResponse({'error': 'Internal server error'}, status=500)
-
-    return JsonResponse({'error': 'Method not allowed'}, status=405)
-
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_courses(request):
+    # Get filters from URL (e.g. ?curriculum=1)
+    curr_id = request.query_params.get('curriculum')
+    courses = Course.objects.all()
+    if curr_id:
+        courses = courses.filter(curriculum_id=curr_id)
+        
+    data = [{
+        "id": c.id,
+        "course_code": c.course_code,
+        "descriptive_title": c.descriptive_title,
+        "lecture_hours": c.lecture_hours,
+        "laboratory_hours": c.laboratory_hours,
+        "credit_units": c.credit_units,
+        "year_level": c.year_level,
+        "semester": c.semester,
+        "color": c.color or "#000000"
+    } for c in courses]
+    return Response(data)

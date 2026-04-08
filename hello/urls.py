@@ -87,4 +87,11 @@ urlpatterns = [
     path('api/auth/password-reset/confirm/', views.api_password_reset_confirm, name='api_password_reset_confirm'),
     path('api/schedule/available-resources/', views.get_available_resources, name='get_available_resources'),
     path('api/user-faculty-data/', views.get_user_faculty_data, name='get_user_faculty_data'),
+
+    #api for mobile app to fetch data for schedule generation
+    path('api/dashboard-stats/', views.get_dashboard_stats, name='api_dashboard_stats'),
+    path('api/curriculums/', views.get_curriculums, name='api_curriculums'),
+    path('api/sections/', views.get_sections, name='api_sections'),
+    path('api/courses/', views.get_courses, name='api_courses'),
 ]
+
