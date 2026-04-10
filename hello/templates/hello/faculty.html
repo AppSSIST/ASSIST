@@ -292,9 +292,9 @@
 
                 <div class="form-group">
                     <label>Email</label>
-                    <input type="email" name="email" required>
+                    <input type="email" id="add_email" name="email" required pattern=".+@tip\.edu\.ph" title="Must be an @tip.edu.ph email address">
                     <small style="color: #6C757D; font-size: 0.8rem; margin-top: 4px; display: block;">
-                        A setup link will be sent to this email so the faculty can choose their own password.
+                        Only @tip.edu.ph addresses are allowed. A setup link will be sent to this email so the faculty can choose their own password.
                     </small>
                 </div>
 
@@ -732,6 +732,11 @@
         function submitAddFaculty(event) {
             event.preventDefault();
             const formData = new FormData(event.target);
+            const emailValue = (formData.get('email') || '').toString().trim().toLowerCase();
+            if (!emailValue.endsWith('@tip.edu.ph')) {
+                showNotification('Only @tip.edu.ph email addresses can be used to create an account.', 'error');
+                return;
+            }
             
             // Add selected specializations from multiselect
             multiselectStates.add.selected.forEach(value => {

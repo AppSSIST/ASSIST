@@ -410,38 +410,29 @@ def add_faculty(request):
             prc_licensed = request.POST.get('prc_licensed') == 'on'
             specialization_ids = request.POST.getlist('specialization')
             
-            # Validate email domain
-            if '@' not in email or '.' not in email.split('@')[1]:
+            # Normalize and validate email domain
+            email = email.strip().lower()
+            if not email.endswith('@tip.edu.ph'):
                 return JsonResponse({
                     'success': False,
-                    'errors': ['Please enter a valid email address with a proper domain (e.g., user@gmail.com)']
+                    'errors': ['Only @tip.edu.ph email addresses can be used to create an account.']
                 })
-            
-            # Check if email already exists
-            if Faculty.objects.filter(email=email).exists():
+
+            # Check if email already exists (case-insensitive)
+            if Faculty.objects.filter(email__iexact=email).exists() or User.objects.filter(email__iexact=email).exists():
                 return JsonResponse({
                     'success': False,
                     'errors': ['This email is already registered.']
                 })
-            
-# Generate random password for initial account creation
+
             password = generate_password()
+            username = email
 
-            # Build a sanitized username and ensure uniqueness
-            base_username = f"{first_name.strip().lower().replace(' ', '')}.{last_name.strip().lower().replace(' ', '')}"
-            base_username = re.sub(r'[^a-z0-9._-]', '', base_username)
-            username = base_username
-            counter = 1
-
-            while User.objects.filter(username=username).exists():
-                username = f"{base_username}{counter}"
-                counter += 1
-
-            # Check if email already used by another user
-            if User.objects.filter(email=email).exists():
+            # Check if username already exists, which is same as email in this flow
+            if User.objects.filter(username__iexact=username).exists():
                 return JsonResponse({
                     'success': False,
-                    'errors': ['This email is already associated with another account.']
+                    'errors': ['This username is already taken.']
                 })
 
             user = User.objects.create_user(
@@ -479,7 +470,7 @@ def add_faculty(request):
                 courses = Course.objects.filter(id__in=specialization_ids)
                 faculty.specialization.set(courses)
             
-            # Send email with a password reset invitation link using Resend API
+            # Send email with a password reset invitation link using configured SMTP backend
             email_sent = False
             try:
                 uid = urlsafe_base64_encode(force_bytes(user.pk))
@@ -504,40 +495,22 @@ If you did not request this account, please contact the administrator immediatel
 Best regards,
 ASSIST Administration Team'''
 
-                # Use Resend API to send email
-                resend_api_key = settings.EMAIL_HOST_PASSWORD  # The API key is in EMAIL_HOST_PASSWORD
-                response = requests.post(
-                    'https://api.resend.com/emails',
-                    headers={
-                        'Authorization': f'Bearer {resend_api_key}',
-                        'Content-Type': 'application/json'
-                    },
-                    json={
-                        'from': settings.DEFAULT_FROM_EMAIL,
-                        'to': [email],
-                        'subject': subject,
-                        'text': message
-                    }
+                send_mail(
+                    subject,
+                    message,
+                    settings.DEFAULT_FROM_EMAIL,
+                    [email],
+                    fail_silently=False,
                 )
 
-                print(f"Resend API response: {response.status_code} - {response.text}")
-
-                if response.status_code == 200:
-                    email_sent = True
-                    message_text = f'Faculty added successfully. An invitation email has been sent to {email}.'
-                else:
-                    email_sent = False
-                    message_text = (
-                        'Faculty added successfully, but email could not be sent. '
-                        'Please check your Resend API key and settings.'
-                    )
-
+                email_sent = True
+                message_text = f'Faculty added successfully. An invitation email has been sent to {email}.'
             except Exception as e:
-                print(f"Error sending email: {str(e)}")
+                print(f"Error sending invitation email: {str(e)}")
                 email_sent = False
                 message_text = (
                     'Faculty added successfully, but email could not be sent. '
-                    'Please check your Resend API key and settings.'
+                    'Please check your SMTP settings and credentials.'
                 )
             
             # Log activity
@@ -682,7 +655,7 @@ def delete_faculty(request, faculty_id):
         # Clean up all User accounts associated with this email
         # This handles both the linked user and any orphaned users with the same email
         try:
-            User.objects.filter(email=faculty_email).delete()
+            User.objects.filter(email__iexact=faculty_email.strip().lower()).delete()
         except Exception:
             # Don't fail the whole operation if user deletion has an issue
             pass
