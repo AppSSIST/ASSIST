@@ -1479,6 +1479,39 @@ let currentSectionId = null;
             showAlert('Export to PDF functionality - to be implemented', 'info');
         }
 
+        function deleteAllSchedule() {
+            if (!currentSectionId) {
+                showAlert('Please select a section first', 'warning');
+                return;
+            }
+
+            if (!confirm('Delete all schedules for this section? This cannot be undone.')) {
+                return;
+            }
+
+            fetchWithCSRF(`/admin/section/${currentSectionId}/delete-schedules/`, {
+                method: 'POST'
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    const message = data.deleted_count
+                        ? `Deleted ${data.deleted_count} schedules.`
+                        : data.message || 'No schedules found to delete.';
+                    showAlert(message, 'success');
+                    const sectionName = document.getElementById('scheduleSectionName').textContent;
+                    const curriculum = document.getElementById('scheduleCurriculum').textContent;
+                    loadScheduleView(currentSectionId, sectionName, curriculum);
+                } else {
+                    showAlert(data.error || 'Unable to delete schedules.', 'error');
+                }
+            })
+            .catch(err => {
+                console.error('deleteAllSchedule error', err);
+                showAlert('Unable to delete schedules.', 'error');
+            });
+        }
+
         function printSchedule() {
             if (!currentSectionId) {
                 showAlert('Please select a section first', 'warning');

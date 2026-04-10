@@ -1009,6 +1009,33 @@ def delete_schedule(request, schedule_id):
     return JsonResponse({'success': False})
 
 @login_required(login_url='admin_login')
+@user_passes_test(is_admin, login_url='admin_login')
+def delete_section_schedules(request, section_id):
+    """Delete all schedules for a section"""
+    if request.method == 'POST':
+        section = get_object_or_404(Section, id=section_id)
+        schedules_qs = Schedule.objects.filter(section=section)
+        deleted_count = schedules_qs.count()
+
+        if deleted_count == 0:
+            return JsonResponse({'success': True, 'message': 'No schedules found for this section.'})
+
+        schedules_qs.delete()
+        section.status = 'incomplete'
+        section.save()
+
+        log_activity(
+            user=request.user,
+            action='delete',
+            entity_type='schedule',
+            entity_name=f'All schedules for {section.name}',
+            message=f'Deleted {deleted_count} schedules for section {section.name}'
+        )
+
+        return JsonResponse({'success': True, 'deleted_count': deleted_count})
+    return JsonResponse({'success': False})
+
+@login_required(login_url='admin_login')
 def staff_dashboard(request):
     """
     Staff dashboard - limited view for non-admin faculty

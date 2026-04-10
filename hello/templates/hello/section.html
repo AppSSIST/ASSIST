@@ -96,7 +96,7 @@
                 {% if sections %}
                 <div class="sections-container">
                     {% for section in sections %}
-                    <div class="section-card" data-section-id="{{ section.id }}" data-section-name="{{ section.name|lower }}" data-curriculum="{{ section.curriculum.name|lower }}" onclick="loadSectionSchedule({{ section.id }}, '{{ section.name }}', '{{ section.curriculum.name }} ({{ section.curriculum.year }})')">
+                    <div class="section-card" data-section-id="{{ section.id }}" data-section-name="{{ section.name|lower }}" data-curriculum="{{ section.curriculum.name|lower }}" onclick="loadSectionSchedule(event, {{ section.id }}, '{{ section.name }}', '{{ section.curriculum.name }} ({{ section.curriculum.year }})')">
                         <div class="card-header">
                             <div class="card-header-left">
                                 <div class="card-title">{{ section.name }}</div>
@@ -114,13 +114,13 @@
                                         </svg>
                                     </button>
                                     <div class="section-dropdown-menu" id="sectionMenu{{ section.id }}">
-                                        <button class="dropdown-item" onclick="openEditSectionModal({{ section.id }})">
+                                        <button class="dropdown-item" onclick="openEditSectionModal(event, {{ section.id }})">
                                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                                                 <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
                                             </svg>
                                             Edit
                                         </button>
-                                        <button class="dropdown-item delete-item" onclick="deleteSection({{ section.id }}, '{{ section.name }}')">
+                                        <button class="dropdown-item delete-item" onclick="deleteSection(event, {{ section.id }}, '{{ section.name }}')">
                                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                                                 <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
                                             </svg>
@@ -164,12 +164,6 @@
                         <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
                     </svg>
                     <p>No sections available. Add a section to get started.</p>
-                    <button class="add-section-btn" onclick="openAddSectionModal()">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                        </svg>
-                        Add Section
-                    </button>
                 </div>
                 {% endif %}
             </div>
@@ -195,6 +189,12 @@
                                     <path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/>
                                 </svg>
                                 PDF
+                            </button>
+                            <button class="btn-export btn-delete-schedule" onclick="deleteAllSchedule()">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18">
+                                    <path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zm11-14h-3.5l-1-1h-5l-1 1H5v2h14V5z"/>
+                                </svg>
+                                Delete All Schedule
                             </button>
                             <button class="btn-print" onclick="printSchedule()">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18">
@@ -445,8 +445,9 @@
             openModal('addSectionModal');
         }
 
-        function openEditSectionModal(sectionId) {
-            event.stopPropagation();
+        function openEditSectionModal(event, sectionId) {
+            event = event || window.event;
+            if (event && event.stopPropagation) event.stopPropagation();
             document.querySelectorAll('.section-dropdown-menu').forEach(menu => {
                 menu.classList.remove('show');
             });
@@ -609,8 +610,9 @@
             }
         }
 
-        function deleteSection(sectionId, sectionName) {
-            event.stopPropagation();
+        function deleteSection(event, sectionId, sectionName) {
+            event = event || window.event;
+            if (event && event.stopPropagation) event.stopPropagation();
             document.querySelectorAll('.section-dropdown-menu').forEach(menu => {
                 menu.classList.remove('show');
             });
@@ -628,35 +630,27 @@
                         showNotification('Section deleted successfully!', 'success');
                         setTimeout(() => window.location.reload(), 1000);
                     } else {
-                        showNotification('Error deleting section', 'error');
+                        const errorMsg = data.errors ? data.errors.join('\n') : 'Error deleting section';
+                        showNotification(errorMsg, 'error');
                     }
                 })
                 .catch(error => {
-                    showNotification('Error deleting section', 'error');
+                    showNotification('Error deleting section: ' + error.message, 'error');
                 });
             }
         }
 
-        function showNotification(message, type) {
-            const notification = document.createElement('div');
-            notification.className = `notification ${type} show`;
-            notification.textContent = message;
-            document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                notification.classList.remove('show');
-                setTimeout(() => notification.remove(), 300);
-            }, 3000);
-        }
-
-        function loadSectionSchedule(sectionId, sectionName, curriculum) {
+        function loadSectionSchedule(event, sectionId, sectionName, curriculum) {
+            event = event || window.event;
             currentSectionId = sectionId;
             
             // Update selected state
             document.querySelectorAll('.section-card').forEach(card => {
                 card.classList.remove('selected');
             });
-            event.currentTarget.classList.add('selected');
+            if (event && event.currentTarget) {
+                event.currentTarget.classList.add('selected');
+            }
             
             // Show loading or schedule view
             document.getElementById('scheduleEmptyState').style.display = 'none';
@@ -823,6 +817,42 @@
             if (currentSectionId) {
                 window.print();
             }
+        }
+
+        function deleteAllSchedule() {
+            if (!currentSectionId) {
+                showNotification('Select a section first before deleting schedules.', 'error');
+                return;
+            }
+
+            if (!confirm('Delete all schedules for this section? This cannot be undone.')) {
+                return;
+            }
+
+            fetch(`/admin/section/${currentSectionId}/delete-schedules/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const message = data.deleted_count
+                        ? `Deleted ${data.deleted_count} schedules.`
+                        : data.message || 'No schedules found to delete.';
+                    showNotification(message, 'success');
+                    const sectionName = document.getElementById('scheduleSectionName').textContent;
+                    const curriculum = document.getElementById('scheduleCurriculum').textContent;
+                    loadSectionSchedule(null, currentSectionId, sectionName, curriculum);
+                } else {
+                    showNotification(data.error || 'Unable to delete schedules.', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('deleteAllSchedule error:', error);
+                showNotification('Unable to delete schedules.', 'error');
+            });
         }
     </script>
 </body>

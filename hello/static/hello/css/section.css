@@ -11,6 +11,7 @@ body {
     font-family: 'Lexend', sans-serif;
     background-color: #E9ECEF;
     min-height: 100vh;
+    padding-top: 70px;
 }
 
 /* Top Navigation Bar */
@@ -215,6 +216,8 @@ body {
     margin-top: 70px;
     padding: 40px;
     min-height: calc(100vh - 70px);
+    position: relative;
+    z-index: 1;
 }
 
 /* Content Wrapper - Vertical Layout */
@@ -1075,7 +1078,7 @@ body {
     visibility: hidden;
     transform: translateX(400px);
     transition: all 0.3s ease;
-    z-index: 2000;
+    z-index: 9999;
     min-width: 250px;
     max-width: 400px;
 }

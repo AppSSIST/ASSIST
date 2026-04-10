@@ -20,6 +20,7 @@ urlpatterns = [
     path('admin/section/edit/<int:section_id>/', views.edit_section, name='edit_section'),
     path('admin/section/delete/<int:section_id>/', views.delete_section, name='delete_section'),
     path('admin/section/<int:section_id>/schedule-data/', views.get_section_schedule, name='get_section_schedule'),
+    path('admin/section/<int:section_id>/delete-schedules/', views.delete_section_schedules, name='delete_section_schedules'),
     path('admin/section/<int:section_id>/toggle-status/', views.toggle_section_status, name='toggle_section_status'),
     
     # Courses
