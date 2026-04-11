@@ -2736,9 +2736,48 @@ def get_sections(request):
     } for s in sections]
     return Response(data)
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def get_courses(request):
+    if request.method == 'POST':
+        # Handle course creation
+        try:
+            # Get the data sent from the mobile app
+            data = request.data
+            
+            # Create the new course in the database
+            course = Course.objects.create(
+                curriculum_id=data.get('curriculum'),
+                course_code=data.get('course_code'),
+                descriptive_title=data.get('descriptive_title'),
+                lecture_hours=data.get('lecture_hours'),
+                laboratory_hours=data.get('laboratory_hours'),
+                credit_units=data.get('credit_units'),
+                year_level=data.get('year_level'),
+                semester=data.get('semester')
+            )
+            
+            # Log the activity
+            log_activity(
+                user=request.user,
+                action='add',
+                entity_type='course',
+                entity_name=f"{course.course_code}",
+                message=f"Added course {course.course_code} via Mobile"
+            )
+
+            # Return the success response
+            return Response({
+                "id": course.id,
+                "course_code": course.course_code,
+                "descriptive_title": course.descriptive_title,
+                "color": course.color
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # GET request handling (existing logic)
     # Get filters from URL (e.g. ?curriculum=1)
     curr_id = request.query_params.get('curriculum')
     courses = Course.objects.all()
@@ -2757,3 +2796,123 @@ def get_courses(request):
         "color": c.color or "#000000"
     } for c in courses]
     return Response(data)
+
+@api_view(['GET', 'PUT', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def course_detail(request, course_id):
+    try:
+        course = Course.objects.get(id=course_id)
+    except Course.DoesNotExist:
+        return Response({"error": "Course not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == 'GET':
+        # Return course details
+        data = {
+            "id": course.id,
+            "course_code": course.course_code,
+            "descriptive_title": course.descriptive_title,
+            "lecture_hours": course.lecture_hours,
+            "laboratory_hours": course.laboratory_hours,
+            "credit_units": course.credit_units,
+            "year_level": course.year_level,
+            "semester": course.semester,
+            "color": course.color or "#000000",
+            "curriculum": course.curriculum.id if course.curriculum else None
+        }
+        return Response(data)
+
+    elif request.method == 'PUT':
+        # Update course
+        try:
+            data = request.data
+            
+            # Update course fields
+            course.curriculum_id = data.get('curriculum', course.curriculum_id)
+            course.course_code = data.get('course_code', course.course_code)
+            course.descriptive_title = data.get('descriptive_title', course.descriptive_title)
+            course.lecture_hours = data.get('lecture_hours', course.lecture_hours)
+            course.laboratory_hours = data.get('laboratory_hours', course.laboratory_hours)
+            course.credit_units = data.get('credit_units', course.credit_units)
+            course.year_level = data.get('year_level', course.year_level)
+            course.semester = data.get('semester', course.semester)
+            
+            course.full_clean()
+            course.save()
+            
+            # Log the activity
+            log_activity(
+                user=request.user,
+                action='update',
+                entity_type='course',
+                entity_name=f"{course.course_code}",
+                message=f"Updated course {course.course_code} via Mobile"
+            )
+
+            return Response({
+                "id": course.id,
+                "course_code": course.course_code,
+                "descriptive_title": course.descriptive_title,
+                "color": course.color
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    elif request.method == 'DELETE':
+        # Delete course
+        try:
+            course_code = course.course_code
+            course.delete()
+            
+            # Log the activity
+            log_activity(
+                user=request.user,
+                action='delete',
+                entity_type='course',
+                entity_name=f"{course_code}",
+                message=f"Deleted course {course_code} via Mobile"
+            )
+
+            return Response({"message": "Course deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_add_course(request):
+    try:
+        # Get the data sent from the mobile app
+        data = request.data
+        
+        # Create the new course in the database
+        course = Course.objects.create(
+            curriculum_id=data.get('curriculum'),
+            course_code=data.get('course_code'),
+            descriptive_title=data.get('descriptive_title'),
+            lecture_hours=data.get('lecture_hours'),
+            laboratory_hours=data.get('laboratory_hours'),
+            credit_units=data.get('credit_units'),
+            year_level=data.get('year_level'),
+            semester=data.get('semester')
+        )
+        
+        # Log the activity
+        log_activity(
+            user=request.user,
+            action='add',
+            entity_type='course',
+            entity_name=f"{course.course_code}",
+            message=f"Added course {course.course_code} via Mobile"
+        )
+
+        # Return the success response
+        return Response({
+            "id": course.id,
+            "course_code": course.course_code,
+            "descriptive_title": course.descriptive_title,
+            "color": course.color
+        }, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

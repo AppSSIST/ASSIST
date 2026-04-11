@@ -94,5 +94,7 @@ urlpatterns = [
     path('api/curriculums/', views.get_curriculums, name='api_curriculums'),
     path('api/sections/', views.get_sections, name='api_sections'),
     path('api/courses/', views.get_courses, name='api_courses'),
+    path('api/courses/<int:course_id>/', views.course_detail, name='course_detail'),
+    path('api/courses/add/', views.api_add_course, name='api_add_course'),
 ]
 
