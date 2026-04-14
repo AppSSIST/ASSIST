@@ -583,7 +583,7 @@
             timeSlots.forEach(time => {
                 const label = document.createElement('div');
                 label.className = 'time-label';
-                label.textContent = time;
+                label.textContent = formatTimeLabel(time);
                 label.style.top = `${calculateTopPosition(time)}px`;
                 timeColumn.appendChild(label);
             });
@@ -623,7 +623,7 @@
                 // Add content
                 block.innerHTML = `
                     <div class="schedule-course-code">${schedule.course_code}</div>
-                    <div class="schedule-details">${schedule.start_time} - ${schedule.end_time}</div>
+                    <div class="schedule-details">${formatTimeLabel(schedule.start_time)} - ${formatTimeLabel(schedule.end_time)}</div>
                     ${roomDisplay}
                     <div class="schedule-details">Section: ${schedule.section_name}</div>
                 `;
@@ -672,7 +672,7 @@
                     section: schedule.section_name,
                     faculty: schedule.faculty || 'TBA',
                     day: schedule.day,
-                    time: `${schedule.start_time}-${schedule.end_time}`
+                    time: `${formatTimeLabel(schedule.start_time)} - ${formatTimeLabel(schedule.end_time)}`
                 });
             });
             
@@ -701,6 +701,13 @@
             });
             
             console.log('Finished rendering courses');
+        }
+
+        function formatTimeLabel(timeStr) {
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            const suffix = hours < 12 ? 'AM' : 'PM';
+            const hour12 = hours % 12 || 12;
+            return `${hour12}:${minutes.toString().padStart(2, '0')} ${suffix}`;
         }
 
         function calculateTopPosition(timeStr) {

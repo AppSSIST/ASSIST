@@ -68,6 +68,18 @@ def schedule_top(start_time):
 
 
 @register.filter
+def time_12hr(value):
+    """Format 24-hour time strings into 12-hour labels."""
+    try:
+        hours, minutes = map(int, str(value).split(':'))
+        suffix = 'AM' if hours < 12 else 'PM'
+        hour_12 = hours % 12 or 12
+        return f"{hour_12}:{minutes:02d} {suffix}"
+    except Exception:
+        return value
+
+
+@register.filter
 def auto_color(value):
     """
     Generate a distinct color for a course based on its code.

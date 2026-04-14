@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.http import JsonResponse
+from django.http import JsonResponse, Http404
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
@@ -957,6 +957,228 @@ def schedule_view(request):
     return render(request, 'hello/schedule.html', context)
 
 @login_required(login_url='admin_login')
+def admin_section_schedule_print(request, section_id):
+    """
+    Print-friendly view for an admin section schedule.
+    """
+    def hex_to_rgba(hex_color, alpha=0.15):
+        """Convert hex color to rgba format"""
+        hex_color = hex_color.lstrip('#')
+        try:
+            r = int(hex_color[0:2], 16)
+            g = int(hex_color[2:4], 16)
+            b = int(hex_color[4:6], 16)
+            return f'rgba({r}, {g}, {b}, {alpha})'
+        except Exception:
+            return 'rgba(255, 167, 38, 0.15)'
+    
+    section = get_object_or_404(Section.objects.select_related('curriculum'), id=section_id)
+
+    schedules = Schedule.objects.filter(section=section).select_related('course', 'room', 'faculty').order_by('day', 'start_time')
+
+    raw_schedules = []
+    for schedule in schedules:
+        raw_schedules.append({
+            'day': schedule.day,
+            'start_time': schedule.start_time,
+            'end_time': schedule.end_time,
+            'course_code': schedule.course.course_code,
+            'room': schedule.room.name if schedule.room else 'TBA',
+            'course_color': schedule.course.color,
+        })
+
+    time_slots = ['07:30']
+    for hour in range(8, 22):
+        for minute in ['00', '30']:
+            if hour == 21 and minute == '30':
+                break
+            time_slots.append(f"{hour:02d}:{minute}")
+    time_slots.append('21:30')
+
+    days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+
+    def _format_time_label(time_str):
+        try:
+            hours, minutes = map(int, str(time_str).split(':'))
+            suffix = 'AM' if hours < 12 else 'PM'
+            hour_12 = hours % 12 or 12
+            return f"{hour_12}:{minutes:02d} {suffix}"
+        except Exception:
+            return str(time_str)
+
+    row_height = 60
+    header_offset = 2 * row_height
+    grid_height = len(time_slots) * row_height + header_offset
+    time_labels = []
+    for idx, t in enumerate(time_slots):
+        top_px = header_offset + idx * row_height
+        time_labels.append({
+            'time': t,
+            'label': _format_time_label(t),
+            'top': top_px,
+        })
+
+    def _normalize_time(val):
+        if val is None:
+            return None
+        if isinstance(val, str):
+            try:
+                parts = val.split(':')
+                h = int(parts[0])
+                m = int(parts[1]) if len(parts) > 1 else 0
+                return f"{h:02d}:{m:02d}"
+            except Exception:
+                return val
+        try:
+            return val.strftime('%H:%M')
+        except Exception:
+            return str(val)
+
+    def _to_minutes(tval):
+        if tval is None:
+            return None
+        if isinstance(tval, str):
+            try:
+                parts = tval.split(':')
+                h = int(parts[0])
+                m = int(parts[1]) if len(parts) > 1 else 0
+                return h * 60 + m
+            except Exception:
+                try:
+                    hhmm = tval.strip().split('.')[0]
+                    h, m = map(int, hhmm.split(':')[:2])
+                    return h * 60 + m
+                except Exception:
+                    return None
+        try:
+            return tval.hour * 60 + tval.minute
+        except Exception:
+            try:
+                s = str(tval)
+                h, m = map(int, s.split(':')[:2])
+                return h * 60 + m
+            except Exception:
+                return None
+
+    schedule_map = {}
+    covered = set()
+    for rs in raw_schedules:
+        day_idx = rs['day']
+        start = _normalize_time(rs['start_time'])
+        end = _normalize_time(rs['end_time'])
+        if not start or not end:
+            key = (day_idx, start)
+            color = rs.get('course_color', '#FFA726')
+            schedule_map[key] = {
+                'rowspan': 1,
+                'course_code': rs['course_code'],
+                'room': rs['room'],
+                'course_color': color,
+                'rgba_color': hex_to_rgba(color),
+            }
+            continue
+
+        start_min = _to_minutes(start)
+        end_min = _to_minutes(end)
+        last_slot_min = 21 * 60 + 30
+        if end_min is not None and end_min > last_slot_min:
+            end_min = last_slot_min
+
+        if start_min is None or end_min is None:
+            key = (day_idx, start)
+            color = rs.get('course_color', '#FFA726')
+            schedule_map[key] = {
+                'rowspan': 1,
+                'course_code': rs['course_code'],
+                'room': rs['room'],
+                'course_color': color,
+                'rgba_color': hex_to_rgba(color),
+            }
+            continue
+
+        base_min = 7 * 60 + 30
+        start_index = (start_min - base_min) // 30
+        slots = (end_min - start_min) // 30
+        if slots < 1:
+            slots = 1
+
+        start_index = max(0, start_index)
+        if start_index >= len(time_slots):
+            start_index = len(time_slots) - 1
+
+        key = (day_idx, time_slots[start_index])
+        color = rs.get('course_color', '#FFA726')
+        schedule_map[key] = {
+            'rowspan': slots,
+            'course_code': rs['course_code'],
+            'room': rs['room'],
+            'course_color': color,
+            'rgba_color': hex_to_rgba(color),
+        }
+        for j in range(1, slots):
+            idx = start_index + j
+            if 0 <= idx < len(time_slots):
+                time_slot_key = time_slots[idx]
+                if (day_idx, time_slot_key) not in schedule_map:
+                    covered.add((day_idx, time_slot_key))
+
+    time_covered = set()
+    time_rowspan_map = {}
+    for idx, t in enumerate(time_slots):
+        if t in time_covered:
+            continue
+        max_slots = 1
+        for d in range(6):
+            key = (d, t)
+            if key in schedule_map:
+                try:
+                    r = int(schedule_map[key].get('rowspan', 1))
+                except Exception:
+                    r = 1
+                if r > max_slots:
+                    max_slots = r
+        if max_slots > 1:
+            for j in range(1, max_slots):
+                next_idx = idx + j
+                if 0 <= next_idx < len(time_slots):
+                    time_covered.add(time_slots[next_idx])
+        time_rowspan_map[t] = max_slots
+
+    table_rows = []
+    for t in time_slots:
+        cells = []
+        for d in range(6):
+            if (d, t) in covered:
+                cells.append('skip')
+            elif (d, t) in schedule_map:
+                cells.append(schedule_map[(d, t)])
+            else:
+                cells.append(None)
+        table_rows.append({'time': t, 'cells': cells})
+
+    unique_course_ids = section.schedules.values_list('course', flat=True).distinct()
+    totals = Course.objects.filter(id__in=unique_course_ids).aggregate(
+        total_lec=Sum('lecture_hours'),
+        total_lab=Sum('laboratory_hours'),
+        total_units=Sum('credit_units')
+    )
+
+    context = {
+        'user': request.user,
+        'section': section,
+        'table_rows': table_rows,
+        'grid_height': grid_height,
+        'time_labels': time_labels,
+        'time_slots': time_slots,
+        'days': days,
+        'total_lec': totals.get('total_lec') or 0,
+        'total_lab': totals.get('total_lab') or 0,
+        'total_units': totals.get('total_units') or 0,
+    }
+
+    return render(request, 'hello/section_schedule_print.html', context)
+
+@login_required(login_url='admin_login')
 def toggle_section_status(request, section_id):
     """Toggle section schedule status"""
     if request.method == 'POST':
@@ -1188,6 +1410,15 @@ def staff_schedule_print(request):
     # the template so the print view can render absolute-positioned, centered
     # time labels matching staff_schedule.html (07:30 at 120px, 08:00 at 180px, etc).
     # NOTE: There are 2 empty rows before the first time slot (07:30), so offset by 120px (2 * 60px)
+    def _format_time_label(time_str):
+        try:
+            hours, minutes = map(int, str(time_str).split(':'))
+            suffix = 'AM' if hours < 12 else 'PM'
+            hour_12 = hours % 12 or 12
+            return f"{hour_12}:{minutes:02d} {suffix}"
+        except Exception:
+            return str(time_str)
+
     try:
         row_height = 60
         # The 1 empty row at the top takes up 60px
@@ -1198,11 +1429,22 @@ def staff_schedule_print(request):
         for idx, t in enumerate(time_slots):
             # Position at 120px + idx * 60px (centered on horizontal lines)
             top_px = header_offset + idx * row_height
-            time_labels.append({'time': t, 'top': top_px})
+            time_labels.append({
+                'time': t,
+                'label': _format_time_label(t),
+                'top': top_px,
+            })
     except Exception:
         header_offset = 120
         grid_height = len(time_slots) * 60 + 120
-        time_labels = [{'time': t, 'top': 120 + i * 60} for i, t in enumerate(time_slots)]
+        time_labels = [
+            {
+                'time': t,
+                'label': _format_time_label(t),
+                'top': 120 + i * 60,
+            }
+            for i, t in enumerate(time_slots)
+        ]
 
     # Helper to normalize time values to HH:MM strings
     from datetime import time as _time
@@ -2528,6 +2770,7 @@ def get_user_faculty_data(request):
             'email': faculty.email,
             'gender': faculty.gender or '',
             'profile_picture_url': profile_pic_url,
+            'total_units': faculty.total_units,
         }, status=status.HTTP_200_OK)
 
     except Faculty.DoesNotExist:
@@ -2537,6 +2780,7 @@ def get_user_faculty_data(request):
             'email': request.user.email,
             'gender': '',
             'profile_picture_url': None,
+            'total_units': 0,
         }, status=status.HTTP_200_OK)
 
 def api_password_reset(request):
@@ -2736,6 +2980,46 @@ def get_sections(request):
     } for s in sections]
     return Response(data)
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_rooms(request):
+    rooms = Room.objects.all().order_by('campus', 'room_number')
+    data = [{
+        "id": r.id,
+        "name": r.name,
+        "room_number": r.room_number,
+        "capacity": r.capacity,
+        "campus": r.campus,
+        "room_type": r.room_type,
+    } for r in rooms]
+    return Response(data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_faculty_list(request):
+    faculty = Faculty.objects.all().order_by('last_name', 'first_name')
+    data = []
+    for f in faculty:
+        # Build full URL for profile picture if it exists
+        profile_pic_url = None
+        if f.profile_picture:
+            profile_pic_url = request.build_absolute_uri(f.profile_picture.url)
+        
+        data.append({
+            "id": f.id,
+            "first_name": f.first_name,
+            "last_name": f.last_name,
+            "email": f.email,
+            "gender": f.gender,
+            "employment_status": f.employment_status,
+            "department": f.department,
+            "profile_picture_url": profile_pic_url,
+            "highest_degree": f.highest_degree,
+            "prc_licensed": f.prc_licensed,
+            "total_units": f.total_units,
+        })
+    return Response(data)
+
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def get_courses(request):
@@ -2916,3 +3200,106 @@ def api_add_course(request):
 
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_faculty_schedule(request, faculty_id):
+    """API endpoint to get schedule data for a specific faculty member"""
+    try:
+        faculty = get_object_or_404(Faculty, id=faculty_id)
+        
+        # Get all schedules for this faculty
+        schedules = Schedule.objects.filter(faculty=faculty).select_related(
+            'course', 'section', 'room'
+        ).order_by('day', 'start_time')
+        
+        # Format schedule data
+        schedule_data = []
+        for schedule in schedules:
+            schedule_item = {
+                'day': schedule.day,
+                'start_time': schedule.start_time,
+                'end_time': schedule.end_time,
+                'duration': schedule.duration,
+                'course_code': schedule.course.course_code,
+                'course_title': schedule.course.descriptive_title,
+                'course_color': schedule.course.color,
+                'room': schedule.room.name if schedule.room else 'TBA',
+                'section_name': schedule.section.name,
+            }
+            schedule_data.append(schedule_item)
+        
+        # Get faculty specializations
+        specializations = []
+        for course in faculty.specialization.all():
+            specializations.append({
+                'course_code': course.course_code,
+                'descriptive_title': course.descriptive_title,
+                'color': course.color
+            })
+        
+        return Response({
+            'schedules': schedule_data,
+            'specializations': specializations,
+            'total_units': faculty.total_units
+        }, status=status.HTTP_200_OK)
+        
+    except Http404:
+        return Response({'error': 'Faculty not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_my_schedule(request):
+    """API endpoint to get the logged-in user's own schedule"""
+    try:
+        # Get the faculty profile for the logged-in user
+        faculty = Faculty.objects.get(user=request.user)
+        
+        # Get all schedules for this faculty
+        schedules = Schedule.objects.filter(faculty=faculty).select_related(
+            'course', 'section', 'room'
+        ).order_by('day', 'start_time')
+        
+        # Format schedule data
+        schedule_data = []
+        for schedule in schedules:
+            schedule_item = {
+                'day': schedule.day,
+                'start_time': str(schedule.start_time),
+                'end_time': str(schedule.end_time),
+                'duration': schedule.duration,
+                'course_code': schedule.course.course_code,
+                'course_title': schedule.course.descriptive_title,
+                'course_color': schedule.course.color,
+                'room': schedule.room.name if schedule.room else 'TBA',
+                'section_name': schedule.section.name,
+            }
+            schedule_data.append(schedule_item)
+        
+        # Get faculty specializations
+        specializations = []
+        for course in faculty.specialization.all():
+            specializations.append({
+                'course_code': course.course_code,
+                'descriptive_title': course.descriptive_title,
+                'color': course.color
+            })
+        
+        return Response({
+            'faculty_id': faculty.id,
+            'schedules': schedule_data,
+            'specializations': specializations,
+            'total_units': faculty.total_units
+        }, status=status.HTTP_200_OK)
+        
+    except Faculty.DoesNotExist:
+        return Response({
+            'faculty_id': None,
+            'schedules': [],
+            'specializations': [],
+            'total_units': 0
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Recommended Teaching Assignment - {{ faculty.first_name }}</title>
+    <title>Recommended Teaching Assignment - {{ section.name }}</title>
     <style>
         * {
             margin: 0;
@@ -16,7 +16,6 @@
                 font-family: Arial, sans-serif;
                 background: white;
             }
-            
             .print-container {
                 width: 100%;
                 page-break-after: always;
@@ -29,7 +28,6 @@
             padding: 10px;
         }
 
-        /* Configure page size for print and PDF generation */
         @page {
             size: letter;
             margin: 0.35in;
@@ -37,14 +35,13 @@
 
         .print-container {
             background: white;
-            /* Keep letter width but allow taller content to be visible in the browser and for html2pdf */
             width: 8.5in;
-            min-height: 1600px; /* increased pixel height so lower rows are visible */
+            min-height: 1600px;
             margin: 20px auto;
             padding: 0.35in;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
             box-sizing: border-box;
-            overflow: visible; /* allow content to extend below the container */
+            overflow: visible;
             display: flex;
             flex-direction: column;
         }
@@ -92,11 +89,13 @@
             gap: 20px;
             font-size: 10px;
             margin-bottom: 10px;
+            flex-wrap: wrap;
         }
 
         .college-checkbox {
             display: flex;
             gap: 3px;
+            white-space: nowrap;
         }
 
         .checkbox {
@@ -109,6 +108,43 @@
         .checkbox.checked::before {
             content: "✓";
             font-weight: bold;
+            font-size: 10px;
+            display: block;
+            line-height: 12px;
+            text-align: center;
+        }
+
+        .section-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            font-size: 10px;
+            margin-bottom: 10px;
+        }
+
+        .section-info div {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .info-label {
+            font-weight: bold;
+            min-width: 120px;
+        }
+
+        .info-value {
+            border-bottom: 1px solid #000;
+            flex: 1;
+            padding-left: 5px;
+            min-height: 16px;
+        }
+
+        .print-schedule-container {
+            position: relative;
+            display: flex;
+            gap: 0;
+            margin-bottom: 10px;
         }
 
         .schedule-table {
@@ -118,8 +154,6 @@
             margin-bottom: 10px;
         }
 
-        /* Reduce visual glitches when a rowspan cell crosses a page break.
-           Prevent row/cell fragmentation in print where supported. */
         .schedule-table, .schedule-table tbody {
             page-break-inside: avoid;
         }
@@ -142,8 +176,6 @@
             border: 1px solid #000;
             padding: 3px 4px;
             text-align: center;
-            /* Increase row height so each 30-minute slot matches interactive view (60px)
-               and a 1-hour class (2 slots) spans exactly 120px. */
             height: 60px;
             font-size: 9px;
         }
@@ -154,12 +186,6 @@
             font-size: 9px;
         }
 
-        .schedule-table .time-col {
-            width: 60px;
-            font-weight: bold;
-            font-size: 8px;
-        }
-
         .schedule-table .day-col {
             width: 14%;
         }
@@ -167,6 +193,63 @@
         .schedule-table .course-cell {
             font-size: 8px;
             vertical-align: top;
+            position: relative;
+            padding: 8px 6px;
+            text-align: left;
+            line-height: 1.2;
+            border-left: 4px solid;
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .schedule-cell-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        .schedule-cell-arrow {
+            position: absolute;
+            left: 50%;
+            top: 10px;
+            bottom: 10px;
+            width: 2px;
+            background-color: currentColor;
+            opacity: 0.5;
+            transform: translateX(-50%);
+            z-index: 1;
+        }
+
+        .schedule-cell-arrow::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 3px solid transparent;
+            border-right: 3px solid transparent;
+            border-top: 4px solid currentColor;
+        }
+
+        .schedule-time-column {
+            position: relative;
+            width: 60px;
+            height: {{ grid_height }}px;
+            background-color: #f9f9f9;
+            border: 1px solid #000;
+            border-right: none;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+
+        .schedule-time-column .time-label {
+            position: absolute;
+            left: 0;
+            right: 0;
+            transform: translateY(-50%);
+            text-align: center;
+            font-size: 9px;
+            font-weight: bold;
         }
 
         .faculty-info {
@@ -175,23 +258,6 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 8px;
-        }
-
-        .info-row {
-            display: flex;
-            margin-bottom: 5px;
-        }
-
-        .info-label {
-            font-weight: bold;
-            width: 140px;
-            min-width: 140px;
-        }
-
-        .info-value {
-            border-bottom: 1px solid #000;
-            flex: 1;
-            padding-left: 5px;
         }
 
         .units-section {
@@ -229,7 +295,6 @@
             grid-template-columns: 1fr 1fr 1fr;
             gap: 20px;
             font-size: 9px;
-            /* Keep signatures together on the same page when possible */
             page-break-inside: avoid;
         }
 
@@ -242,43 +307,6 @@
             margin-top: 20px;
             padding-top: 2px;
             font-size: 8px;
-        }
-
-        .no-print {
-            display: none;
-        }
-
-        /* CSS-based arrow using border trick (more reliable for html2pdf) */
-        .schedule-arrow-container {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-            top: 4px;
-            bottom: 4px;
-            width: 12px;
-            z-index: 1;
-        }
-
-        .schedule-arrow-line {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 2px;
-            height: 100%;
-            background: #000;
-            top: 0;
-        }
-
-        .schedule-arrow-head {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-            bottom: -4px;
-            width: 0;
-            height: 0;
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            border-top: 8px solid #000;
         }
 
         .print-actions {
@@ -305,68 +333,37 @@
             .print-actions {
                 display: none;
             }
-            
             .print-container {
                 width: 8.5in;
-                min-height: 1600px; /* keep print area taller if needed to avoid clipping */
+                min-height: 1600px;
                 margin: 0;
                 padding: 0.35in;
                 box-shadow: none;
                 page-break-after: always;
                 overflow: visible;
             }
-
             body {
                 padding: 0;
                 background: white;
             }
-            
-            .schedule-arrow-line {
-                background: #000 !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-            
-            .schedule-arrow-head {
-                border-top: 8px solid #000 !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
         }
 
-        /* Additional print-only adjustments to try to avoid split rowspans */
-        @media print {
-            .schedule-table {
-                border-collapse: separate; /* sometimes improves page-break visuals */
-                border-spacing: 0;
-            }
-            .schedule-table td, .schedule-table th {
-                padding: 2px 3px;
-                height: 12px;
-                font-size: 8px;
-            }
-        }
     </style>
 </head>
 <body>
     <div class="print-actions">
         <button onclick="window.print()">🖨️ Print</button>
         <button onclick="downloadPDF()">📥 Download PDF</button>
-        <button onclick="window.location.href='{% url 'staff_schedule' %}'">✕ Close</button>
+        <button onclick="window.location.href='{% url 'schedule_view' %}'">✕ Close</button>
     </div>
 
     <div class="print-container">
-        <!-- Header -->
         <div class="header">
             <div class="header-logo">TIP - TECHNOLOGICAL INSTITUTE OF THE PHILIPPINES</div>
             <div class="header-title">RECOMMENDED TEACHING ASSIGNMENT</div>
             <div class="header-ref">TIP-ACAD-004 | Revision Status/Date: 01/2025</div>
         </div>
 
-        <!-- Form Title -->
-    <!-- form title/subtitle removed per request -->
-
-        <!-- Colleges Selection -->
         <div class="colleges-section">
             <div class="college-checkbox">
                 <div class="checkbox"></div>
@@ -394,106 +391,69 @@
             </div>
         </div>
 
-        <!-- Program -->
+        <div class="section-info">
+            <div><span class="info-label">Section:</span><span class="info-value">{{ section.name }}</span></div>
+            <div><span class="info-label">Curriculum:</span><span class="info-value">{{ section.curriculum.name }} ({{ section.curriculum.year }})</span></div>
+            <div><span class="info-label">Year Level:</span><span class="info-value">{{ section.get_year_level_display }}</span></div>
+            <div><span class="info-label">Semester:</span><span class="info-value">{{ section.get_semester_display }}</span></div>
+        </div>
+
         <div style="margin-bottom: 8px; font-size: 10px;">
             <strong>Program:</strong>
-            <span style="border-bottom: 1px solid #000; padding: 0 10px; width: 220px; display: inline-block;"></span>
+            <span style="border-bottom: 1px solid #000; padding: 0 10px; width: 220px; display: inline-block;">{{ section.curriculum.name }}</span>
             <strong style="margin-left: 20px;">Semester, S.Y.:</strong>
-            <span style="border-bottom: 1px solid #000; padding: 0 10px; width: 170px; display: inline-block;"></span>
+            <span style="border-bottom: 1px solid #000; padding: 0 10px; width: 170px; display: inline-block;">{{ section.get_semester_display }} / {{ section.curriculum.year }}</span>
         </div>
 
-        <!-- Schedule Grid (Time Column + Table, matching staff_schedule.html) -->
-        <div class="print-schedule-container" style="position:relative; display:flex; gap:0;">
-            <!-- Time Column (DIV-based, absolutely positioned labels at row midpoints) -->
-            <div class="schedule-time-column" id="timeColumn" style="position:relative; width:60px; height: {{ grid_height }}px; background-color:#f9f9f9; border:1px solid #000; border-right:none; flex-shrink:0;">
+        <div class="print-schedule-container">
+            <div class="schedule-time-column" id="timeColumn">
                 {% for tl in time_labels %}
-                    <div class="time-label" style="position:absolute; left:0; right:0; top: {{ tl.top }}px; transform: translateY(-50%); text-align:center; font-size:9px;">{{ tl.label }}</div>
+                <div class="time-label" style="top: {{ tl.top }}px;">{{ tl.label }}</div>
                 {% endfor %}
             </div>
-            <!-- Schedule Table (day columns, no separate time column) -->
-            <table class="schedule-table" style="flex:1; border-collapse:collapse;">
-            <thead>
-                <tr>
-                    <th class="day-col">MONDAY</th>
-                    <th class="day-col">TUESDAY</th>
-                    <th class="day-col">WEDNESDAY</th>
-                    <th class="day-col">THURSDAY</th>
-                    <th class="day-col">FRIDAY</th>
-                    <th class="day-col">SATURDAY</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- Empty header row (1 row for spacing before first time slot 07:30) -->
-                <tr>
-                    <td class="course-cell"></td>
-                    <td class="course-cell"></td>
-                    <td class="course-cell"></td>
-                    <td class="course-cell"></td>
-                    <td class="course-cell"></td>
-                    <td class="course-cell"></td>
-                </tr>
-                {% for row in table_rows %}
-                <tr>
-                    {% for cell in row.cells %}
-                        {% if cell == 'skip' %}
-                            {# cell covered by a previous rowspan - do NOT render a td #}
-                            {# In HTML tables, rowspan cells automatically cover the columns #}
-                            {# in subsequent rows, so we skip rendering them entirely #}
-                        {% elif cell %}
-                            <td class="course-cell" rowspan="{{ cell.rowspan }}" style="position:relative; padding:8px 6px;">
-                                <div style="text-align:left; z-index:5; position:relative;"><strong>{{ cell.course_code }}</strong></div>
-                                <div style="font-size:7px; text-align:left; margin-top:4px; position:relative; z-index:5;">{{ cell.room }}</div>
-
-                                <!-- CSS-based arrow (more reliable for html2pdf) -->
-                                <div class="schedule-arrow-container">
-                                    <div class="schedule-arrow-line"></div>
-                                    <div class="schedule-arrow-head"></div>
-                                </div>
-                            </td>
-                        {% else %}
-                            <td class="course-cell"></td>
-                        {% endif %}
+            <table class="schedule-table">
+                <thead>
+                    <tr>
+                        <th class="day-col">MONDAY</th>
+                        <th class="day-col">TUESDAY</th>
+                        <th class="day-col">WEDNESDAY</th>
+                        <th class="day-col">THURSDAY</th>
+                        <th class="day-col">FRIDAY</th>
+                        <th class="day-col">SATURDAY</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="course-cell"></td>
+                        <td class="course-cell"></td>
+                        <td class="course-cell"></td>
+                        <td class="course-cell"></td>
+                        <td class="course-cell"></td>
+                        <td class="course-cell"></td>
+                    </tr>
+                    {% for row in table_rows %}
+                    <tr>
+                        {% for cell in row.cells %}
+                            {% if cell == 'skip' %}
+                                {# Skip cells covered by a rowspan #}
+                            {% elif cell %}
+                                <td class="course-cell" rowspan="{{ cell.rowspan }}" style="border-left-color: {{ cell.course_color }}; background-color: rgba(255, 167, 38, 0.15);">
+                                    <div class="schedule-cell-arrow" style="color: {{ cell.course_color }};"></div>
+                                    <div class="schedule-cell-content">
+                                        <div><strong>{{ cell.course_code }}</strong></div>
+                                        <div style="font-size:7px; margin-top:4px;">{{ cell.room }}</div>
+                                    </div>
+                                </td>
+                            {% else %}
+                                <td class="course-cell"></td>
+                            {% endif %}
+                        {% endfor %}
+                    </tr>
                     {% endfor %}
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        </div>  <!-- End of print-schedule-container -->
-
-        <!-- Faculty Information -->
-        <div class="faculty-info">
-            <div>
-                <div class="info-row">
-                    <div class="info-label">Name of Faculty:</div>
-                    <div class="info-value">{{ faculty.first_name|default:"" }} {{ faculty.middle_name|default:"" }} {{ faculty.last_name|default:"" }}</div>
-                </div>
-                <div class="info-row">
-                    <div class="info-label">Employment Status (FT, PT, SILILI):</div>
-                    <div class="info-value">{{ faculty.employment_status|default:"" }}</div>
-                </div>
-                <div class="info-row">
-                    <div class="info-label">Highest Degree Earned:</div>
-                    <div style="flex:1; display:flex; gap:20px; align-items:center;">
-                        <div style="font-weight:normal; white-space:nowrap; font-size:9px; display:flex; gap:12px;">
-                            <span style="display:inline-block;">☐&nbsp;Master's degree</span>
-                            <span style="display:inline-block;">☐&nbsp;Doctoral degree</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div>
-                <div class="info-row">
-                    <div class="info-label">PRC License (as applicable)</div>
-                    <div class="info-value"></div>
-                </div>
-                <div class="info-row">
-                    <div class="info-label">Specialization/Subject Matter Expertise:</div>
-                    <div class="info-value"></div>
-                </div>
-            </div>
+                </tbody>
+            </table>
         </div>
 
-        <!-- Units Section -->
         <div class="units-section">
             <div style="margin-bottom: 5px; font-weight: bold;">Units</div>
             <div class="units-row">
@@ -512,7 +472,6 @@
             </div>
         </div>
 
-        <!-- Signature Section -->
         <div class="signature-section">
             <div class="signature-box">
                 <div class="signature-line">Prepared By:</div>
@@ -526,26 +485,20 @@
         </div>
     </div>
 
-    <!-- Load html2pdf from CDN so the Download PDF button works without alert -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.2/html2pdf.bundle.min.js"></script>
-
     <script>
         function downloadPDF() {
-            // Using html2pdf library or window.print() with PDF printer
             const element = document.querySelector('.print-container');
             const opt = {
                 margin: 0.35,
-                filename: 'Teaching_Assignment_{{ faculty.first_name }}_{{ faculty.last_name }}.pdf',
+                filename: 'Teaching_Assignment_{{ section.name }}.pdf',
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2 },
                 jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
             };
-            
-            // If html2pdf is available
             if (typeof html2pdf !== 'undefined') {
                 html2pdf().set(opt).from(element).save();
             } else {
-                // Fallback to print dialog (library failed to load)
                 window.print();
             }
         }

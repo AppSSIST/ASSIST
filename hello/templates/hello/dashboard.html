@@ -587,7 +587,7 @@
                         <div class="schedule-time-column">
                             {% for time in time_slots %}
                             <div class="time-label" style="top: {{ time|schedule_top }}px;">
-                                {{ time }}
+                                {{ time|time_12hr }}
                             </div>
                             {% endfor %}
                         </div>
@@ -606,7 +606,7 @@
                                         border-left-color: {{ schedule.course.color }};
                                     ">
                                     <div class="course-code">{{ schedule.course.course_code }}</div>
-                                    <div class="course-details">{{ schedule.start_time }} - {{ schedule.end_time }}</div>
+                                    <div class="course-details">{{ schedule.start_time|time_12hr }} - {{ schedule.end_time|time_12hr }}</div>
                                     <div class="course-details">Room: {{ schedule.room.name|default:'TBA' }}</div>
                                     <div class="course-details">Section: {{ schedule.section.name|default:'No Section' }}</div>
                                 </div>

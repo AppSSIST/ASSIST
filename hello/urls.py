@@ -31,6 +31,7 @@ urlpatterns = [
     
     # Schedules
     path('admin/schedule/', views.schedule_view, name='schedule_view'),
+    path('admin/section/<int:section_id>/schedule/print/', views.admin_section_schedule_print, name='admin_section_schedule_print'),
     path('admin/schedule/add/', views.add_schedule, name='add_schedule'),
     path('admin/schedule/delete/<int:schedule_id>/', views.delete_schedule, name='delete_schedule'),
     path('admin/schedule/edit/<int:schedule_id>/', views.edit_schedule, name='edit_schedule'),
@@ -93,6 +94,10 @@ urlpatterns = [
     path('api/dashboard-stats/', views.get_dashboard_stats, name='api_dashboard_stats'),
     path('api/curriculums/', views.get_curriculums, name='api_curriculums'),
     path('api/sections/', views.get_sections, name='api_sections'),
+    path('api/rooms/', views.get_rooms, name='api_rooms'),
+    path('api/faculty-list/', views.get_faculty_list, name='api_faculty_list'),
+    path('api/my-schedule/', views.api_my_schedule, name='api_my_schedule'),
+    path('api/faculty/<int:faculty_id>/schedule-data/', views.api_faculty_schedule, name='api_faculty_schedule'),
     path('api/courses/', views.get_courses, name='api_courses'),
     path('api/courses/<int:course_id>/', views.course_detail, name='course_detail'),
     path('api/courses/add/', views.api_add_course, name='api_add_course'),

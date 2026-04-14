@@ -35,7 +35,7 @@ MIDDLEWARE = [
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-uts54#%bbb5=2kq!x7r1_^cw5!mns5bil#cobw+ynz$zda(ix#')
+SECRET_KEY = config('SECRET_KEY', default='django-insecure-uts54#%bbb5=2kq!x7r1_^cw5!mns5bil#cobw+ynz$zda(ix#default-longer-key-for-jwt')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)

@@ -801,7 +801,7 @@ let currentSectionId = null;
             timeSlots.forEach(time => {
                 const label = document.createElement('div');
                 label.className = 'time-label';
-                label.textContent = time;
+                label.textContent = formatTimeLabel(time);
                 label.style.top = `${calculateTopPosition(time)}px`;
                 timeColumn.appendChild(label);
             });
@@ -837,7 +837,7 @@ let currentSectionId = null;
                 // Add content (match Section page)
                 block.innerHTML = `
                     <div class="schedule-course-code">${schedule.course_code}</div>
-                    <div class="schedule-details">${schedule.start_time} - ${schedule.end_time}</div>
+                    <div class="schedule-details">${formatTimeLabel(schedule.start_time)} - ${formatTimeLabel(schedule.end_time)}</div>
                     <div class="schedule-details">Room: ${schedule.room}</div>
                     <div class="schedule-details">Section: ${schedule.section_name || ''}</div>
                     <div class="schedule-details">Professor: ${schedule.faculty || 'TBA'}</div>
@@ -1308,6 +1308,12 @@ let currentSectionId = null;
             return [`${h12.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`, period];
         }
 
+        function formatTimeLabel(timeStr) {
+            if (!timeStr) return '';
+            const [time12, period] = convertTo12Hour(timeStr);
+            return `${time12} ${period}`;
+        }
+
         function convertTo24Hour(h12, m, p) {
             let h = h12;
             if (p === 'PM' && h12 !== 12) h += 12;
@@ -1476,7 +1482,8 @@ let currentSectionId = null;
                 showAlert('Please select a section first', 'warning');
                 return;
             }
-            showAlert('Export to PDF functionality - to be implemented', 'info');
+            const url = `/admin/section/${currentSectionId}/schedule/print/`;
+            window.open(url, '_blank');
         }
 
         function deleteAllSchedule() {
@@ -1517,7 +1524,8 @@ let currentSectionId = null;
                 showAlert('Please select a section first', 'warning');
                 return;
             }
-            window.print();
+            const url = `/admin/section/${currentSectionId}/schedule/print/`;
+            window.open(url, '_blank');
         }
 
         // Close dropdowns when clicking outside

@@ -81,35 +81,35 @@
                         
                         <!-- Time Column -->
                         <div class="schedule-time-column" id="timeColumn">
-                            <div class="time-label" style="top: 60px;">07:30</div>
-                            <div class="time-label" style="top: 120px;">08:00</div>
-                            <div class="time-label" style="top: 180px;">08:30</div>
-                            <div class="time-label" style="top: 240px;">09:00</div>
-                            <div class="time-label" style="top: 300px;">09:30</div>
-                            <div class="time-label" style="top: 360px;">10:00</div>
-                            <div class="time-label" style="top: 420px;">10:30</div>
-                            <div class="time-label" style="top: 480px;">11:00</div>
-                            <div class="time-label" style="top: 540px;">11:30</div>
-                            <div class="time-label" style="top: 600px;">12:00</div>
-                            <div class="time-label" style="top: 660px;">12:30</div>
-                            <div class="time-label" style="top: 720px;">13:00</div>
-                            <div class="time-label" style="top: 780px;">13:30</div>
-                            <div class="time-label" style="top: 840px;">14:00</div>
-                            <div class="time-label" style="top: 900px;">14:30</div>
-                            <div class="time-label" style="top: 960px;">15:00</div>
-                            <div class="time-label" style="top: 1020px;">15:30</div>
-                            <div class="time-label" style="top: 1080px;">16:00</div>
-                            <div class="time-label" style="top: 1140px;">16:30</div>
-                            <div class="time-label" style="top: 1200px;">17:00</div>
-                            <div class="time-label" style="top: 1260px;">17:30</div>
-                            <div class="time-label" style="top: 1320px;">18:00</div>
-                            <div class="time-label" style="top: 1380px;">18:30</div>
-                            <div class="time-label" style="top: 1440px;">19:00</div>
-                            <div class="time-label" style="top: 1500px;">19:30</div>
-                            <div class="time-label" style="top: 1560px;">20:00</div>
-                            <div class="time-label" style="top: 1620px;">20:30</div>
-                            <div class="time-label" style="top: 1680px;">21:00</div>
-                            <div class="time-label" style="top: 1740px;">21:30</div>
+                            <div class="time-label" style="top: 60px;">7:30 AM</div>
+                            <div class="time-label" style="top: 120px;">8:00 AM</div>
+                            <div class="time-label" style="top: 180px;">8:30 AM</div>
+                            <div class="time-label" style="top: 240px;">9:00 AM</div>
+                            <div class="time-label" style="top: 300px;">9:30 AM</div>
+                            <div class="time-label" style="top: 360px;">10:00 AM</div>
+                            <div class="time-label" style="top: 420px;">10:30 AM</div>
+                            <div class="time-label" style="top: 480px;">11:00 AM</div>
+                            <div class="time-label" style="top: 540px;">11:30 AM</div>
+                            <div class="time-label" style="top: 600px;">12:00 PM</div>
+                            <div class="time-label" style="top: 660px;">12:30 PM</div>
+                            <div class="time-label" style="top: 720px;">1:00 PM</div>
+                            <div class="time-label" style="top: 780px;">1:30 PM</div>
+                            <div class="time-label" style="top: 840px;">2:00 PM</div>
+                            <div class="time-label" style="top: 900px;">2:30 PM</div>
+                            <div class="time-label" style="top: 960px;">3:00 PM</div>
+                            <div class="time-label" style="top: 1020px;">3:30 PM</div>
+                            <div class="time-label" style="top: 1080px;">4:00 PM</div>
+                            <div class="time-label" style="top: 1140px;">4:30 PM</div>
+                            <div class="time-label" style="top: 1200px;">5:00 PM</div>
+                            <div class="time-label" style="top: 1260px;">5:30 PM</div>
+                            <div class="time-label" style="top: 1320px;">6:00 PM</div>
+                            <div class="time-label" style="top: 1380px;">6:30 PM</div>
+                            <div class="time-label" style="top: 1440px;">7:00 PM</div>
+                            <div class="time-label" style="top: 1500px;">7:30 PM</div>
+                            <div class="time-label" style="top: 1560px;">8:00 PM</div>
+                            <div class="time-label" style="top: 1620px;">8:30 PM</div>
+                            <div class="time-label" style="top: 1680px;">9:00 PM</div>
+                            <div class="time-label" style="top: 1740px;">9:30 PM</div>
                         </div>
 
                         <!-- Day Columns -->
@@ -173,7 +173,7 @@
                 
                 scheduleBlock.innerHTML = `
                     <strong class="schedule-course-code">${schedule.course_code}</strong>
-                    <div class="schedule-details">${schedule.start_time} - ${schedule.end_time}</div>
+                    <div class="schedule-details">${formatTimeLabel(schedule.start_time)} - ${formatTimeLabel(schedule.end_time)}</div>
                     <div class="schedule-details">${schedule.room || 'TBA'}</div>
                     <div class="schedule-details">${schedule.section_name}</div>
                 `;
@@ -205,6 +205,13 @@
         }
 
         // Calculate pixel position from start time
+        function formatTimeLabel(timeStr) {
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            const suffix = hours < 12 ? 'AM' : 'PM';
+            const hour12 = hours % 12 || 12;
+            return `${hour12}:${minutes.toString().padStart(2, '0')} ${suffix}`;
+        }
+
         function calculateTopPosition(timeStr) {
             const [hours, minutes] = timeStr.split(':').map(Number);
             const totalMinutes = (hours * 60 + minutes) - (7 * 60);  // 7:30 AM = 0px

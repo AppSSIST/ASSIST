@@ -697,7 +697,7 @@
             timeSlots.forEach(time => {
                 const label = document.createElement('div');
                 label.className = 'time-label';
-                label.textContent = time;
+                label.textContent = formatTimeLabel(time);
                 label.style.top = `${calculateTopPosition(time)}px`;
                 timeColumn.appendChild(label);
             });
@@ -730,7 +730,7 @@
                 // Add content
                 block.innerHTML = `
                     <div class="schedule-course-code">${schedule.course_code}</div>
-                    <div class="schedule-details">${schedule.start_time} - ${schedule.end_time}</div>
+                    <div class="schedule-details">${formatTimeLabel(schedule.start_time)} - ${formatTimeLabel(schedule.end_time)}</div>
                     <div class="schedule-details">Room: ${schedule.room}</div>
                     <div class="schedule-details">Section: ${schedule.section_name}</div>
                 `;
@@ -740,6 +740,13 @@
         }
         
         // Calculate top position based on time (7:00 AM = 0px)
+        function formatTimeLabel(timeStr) {
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            const suffix = hours < 12 ? 'AM' : 'PM';
+            const hour12 = hours % 12 || 12;
+            return `${hour12}:${minutes.toString().padStart(2, '0')} ${suffix}`;
+        }
+
         function calculateTopPosition(timeStr) {
             const [hours, minutes] = timeStr.split(':').map(Number);
             const totalMinutes = (hours * 60 + minutes) - (7 * 60); // Offset from 7:00 AM
