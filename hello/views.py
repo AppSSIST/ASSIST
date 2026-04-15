@@ -29,6 +29,37 @@ from rest_framework import status
 def is_admin(user):
     return user.is_staff and user.is_superuser
 
+
+def send_email_via_brevo_api(subject, message, from_email, recipients):
+    if not settings.BREVO_API_KEY:
+        raise ValueError('Brevo API key is not configured')
+
+    payload = {
+        'sender': {
+            'email': from_email,
+            'name': 'ASSIST Administration Team',
+        },
+        'to': [{'email': recipient} for recipient in recipients],
+        'subject': subject,
+        'textContent': message,
+    }
+
+    headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'api-key': settings.BREVO_API_KEY,
+    }
+
+    response = requests.post(
+        'https://api.brevo.com/v3/smtp/email',
+        json=payload,
+        headers=headers,
+        timeout=settings.EMAIL_TIMEOUT,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
 def admin_login(request):
     """Handle admin login with custom template"""
     # If user is already authenticated, redirect based on role
@@ -495,13 +526,21 @@ If you did not request this account, please contact the administrator immediatel
 Best regards,
 ASSIST Administration Team'''
 
-                send_mail(
-                    subject,
-                    message,
-                    settings.DEFAULT_FROM_EMAIL,
-                    [email],
-                    fail_silently=False,
-                )
+                if getattr(settings, 'BREVO_API_KEY', ''):
+                    send_email_via_brevo_api(
+                        subject,
+                        message,
+                        settings.DEFAULT_FROM_EMAIL,
+                        [email],
+                    )
+                else:
+                    send_mail(
+                        subject,
+                        message,
+                        settings.DEFAULT_FROM_EMAIL,
+                        [email],
+                        fail_silently=False,
+                    )
 
                 email_sent = True
                 message_text = f'Faculty added successfully. An invitation email has been sent to {email}.'
