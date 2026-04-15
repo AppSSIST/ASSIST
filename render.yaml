@@ -31,7 +31,7 @@ services:
       - key: EMAIL_USE_TLS
         value: "True"
       - key: EMAIL_HOST_USER
-        value: "resend"
+        value: "apikey"
       - key: EMAIL_HOST_PASSWORD
         value: "re_VwrppCai_PA6bhEJuBxq5DzhoBD17J9wq"
       - key: EMAIL_TIMEOUT

@@ -48,26 +48,30 @@
 
         .header {
             text-align: center;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
             border-bottom: 2px solid #000;
-            padding-bottom: 8px;
+            padding-bottom: 10px;
         }
 
         .header-logo {
             font-weight: bold;
-            font-size: 14px;
-            margin-bottom: 5px;
+            font-size: 12px;
+            margin-bottom: 3px;
+            letter-spacing: 0.5px;
         }
 
         .header-title {
             font-weight: bold;
-            font-size: 12px;
+            font-size: 13px;
+            margin-bottom: 3px;
+            letter-spacing: 0.5px;
         }
 
         .header-ref {
             text-align: right;
-            font-size: 10px;
-            color: #666;
+            font-size: 9px;
+            color: #333;
+            margin-top: 2px;
         }
 
         .form-title {
@@ -86,31 +90,34 @@
 
         .colleges-section {
             display: flex;
-            gap: 20px;
-            font-size: 10px;
-            margin-bottom: 10px;
+            gap: 15px;
+            font-size: 9px;
+            margin-bottom: 12px;
             flex-wrap: wrap;
+            padding: 0;
         }
 
         .college-checkbox {
             display: flex;
-            gap: 3px;
+            gap: 4px;
             white-space: nowrap;
+            align-items: center;
         }
 
         .checkbox {
-            width: 12px;
-            height: 12px;
+            width: 10px;
+            height: 10px;
             border: 1px solid #000;
             display: inline-block;
+            flex-shrink: 0;
         }
 
         .checkbox.checked::before {
             content: "✓";
             font-weight: bold;
-            font-size: 10px;
+            font-size: 8px;
             display: block;
-            line-height: 12px;
+            line-height: 10px;
             text-align: center;
         }
 
@@ -142,8 +149,7 @@
 
         .print-schedule-container {
             position: relative;
-            display: flex;
-            gap: 0;
+            display: block;
             margin-bottom: 10px;
         }
 
@@ -152,31 +158,15 @@
             border-collapse: collapse;
             font-size: 10px;
             margin-bottom: 10px;
-        }
-
-        .schedule-table, .schedule-table tbody {
             page-break-inside: avoid;
-        }
-        .schedule-table tr {
-            page-break-inside: avoid;
-            break-inside: avoid;
-            -webkit-column-break-inside: avoid;
-            -webkit-page-break-inside: avoid;
-        }
-        .schedule-table td, .schedule-table th {
-            break-inside: avoid;
-            -webkit-column-break-inside: avoid;
-            -webkit-page-break-inside: avoid;
-            -webkit-box-decoration-break: clone;
-            box-decoration-break: clone;
         }
 
         .schedule-table th,
         .schedule-table td {
             border: 1px solid #000;
-            padding: 3px 4px;
+            padding: 8px 4px;
             text-align: center;
-            height: 60px;
+            min-height: 100px;
             font-size: 9px;
         }
 
@@ -184,21 +174,34 @@
             background-color: #f0f0f0;
             font-weight: bold;
             font-size: 9px;
+            min-height: 35px;
+            padding: 8px 2px;
+        }
+
+        .schedule-table .time-col {
+            width: 8%;
+            background-color: #f9f9f9;
+            font-weight: bold;
+            font-size: 8px;
+            padding: 2px;
         }
 
         .schedule-table .day-col {
-            width: 14%;
+            width: 15%;
         }
 
         .schedule-table .course-cell {
             font-size: 8px;
             vertical-align: top;
             position: relative;
-            padding: 8px 6px;
+            padding: 12px 6px;
             text-align: left;
-            line-height: 1.2;
-            border-left: 4px solid;
-            background-color: rgba(255, 255, 255, 0.3);
+            line-height: 1.1;
+            border-left: 1px solid;
+            overflow: hidden;
+            min-height: 120px;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
 
         .schedule-cell-content {
@@ -209,11 +212,10 @@
         .schedule-cell-arrow {
             position: absolute;
             left: 50%;
-            top: 10px;
-            bottom: 10px;
+            top: 4px;
+            bottom: 12px;
             width: 2px;
-            background-color: currentColor;
-            opacity: 0.5;
+            background-color: #000;
             transform: translateX(-50%);
             z-index: 1;
         }
@@ -221,35 +223,14 @@
         .schedule-cell-arrow::after {
             content: '';
             position: absolute;
-            bottom: -4px;
+            bottom: -8px;
             left: 50%;
             transform: translateX(-50%);
             width: 0;
             height: 0;
-            border-left: 3px solid transparent;
-            border-right: 3px solid transparent;
-            border-top: 4px solid currentColor;
-        }
-
-        .schedule-time-column {
-            position: relative;
-            width: 60px;
-            height: {{ grid_height }}px;
-            background-color: #f9f9f9;
-            border: 1px solid #000;
-            border-right: none;
-            flex-shrink: 0;
-            overflow: hidden;
-        }
-
-        .schedule-time-column .time-label {
-            position: absolute;
-            left: 0;
-            right: 0;
-            transform: translateY(-50%);
-            text-align: center;
-            font-size: 9px;
-            font-weight: bold;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-top: 6px solid #000;
         }
 
         .faculty-info {
@@ -330,21 +311,26 @@
         }
 
         @media print {
+            html, body {
+                width: auto !important;
+                height: auto !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: white !important;
+            }
             .print-actions {
-                display: none;
+                display: none !important;
             }
             .print-container {
-                width: 8.5in;
-                min-height: 1600px;
-                margin: 0;
-                padding: 0.35in;
-                box-shadow: none;
-                page-break-after: always;
-                overflow: visible;
-            }
-            body {
-                padding: 0;
-                background: white;
+                width: auto !important;
+                max-width: none !important;
+                min-height: auto !important;
+                margin: 0 !important;
+                padding: 0.35in !important;
+                box-shadow: none !important;
+                page-break-after: always !important;
+                overflow: visible !important;
+                display: block !important;
             }
         }
 
@@ -406,14 +392,10 @@
         </div>
 
         <div class="print-schedule-container">
-            <div class="schedule-time-column" id="timeColumn">
-                {% for tl in time_labels %}
-                <div class="time-label" style="top: {{ tl.top }}px;">{{ tl.label }}</div>
-                {% endfor %}
-            </div>
             <table class="schedule-table">
                 <thead>
                     <tr>
+                        <th class="time-col">TIME</th>
                         <th class="day-col">MONDAY</th>
                         <th class="day-col">TUESDAY</th>
                         <th class="day-col">WEDNESDAY</th>
@@ -423,25 +405,18 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td class="course-cell"></td>
-                        <td class="course-cell"></td>
-                        <td class="course-cell"></td>
-                        <td class="course-cell"></td>
-                        <td class="course-cell"></td>
-                        <td class="course-cell"></td>
-                    </tr>
                     {% for row in table_rows %}
                     <tr>
+                        <td class="time-col">{{ row.time_label }}</td>
                         {% for cell in row.cells %}
                             {% if cell == 'skip' %}
                                 {# Skip cells covered by a rowspan #}
                             {% elif cell %}
-                                <td class="course-cell" rowspan="{{ cell.rowspan }}" style="border-left-color: {{ cell.course_color }}; background-color: rgba(255, 167, 38, 0.15);">
-                                    <div class="schedule-cell-arrow" style="color: {{ cell.course_color }};"></div>
+                                <td class="course-cell" rowspan="{{ cell.rowspan }}" style="border-left-color: {{ cell.course_color }}; background-color: {{ cell.rgba_color }};">
+                                    <div class="schedule-cell-arrow"></div>
                                     <div class="schedule-cell-content">
                                         <div><strong>{{ cell.course_code }}</strong></div>
-                                        <div style="font-size:7px; margin-top:4px;">{{ cell.room }}</div>
+                                        <div style="font-size:7px; margin-top:2px;">{{ cell.room }}</div>
                                     </div>
                                 </td>
                             {% else %}

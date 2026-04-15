@@ -988,11 +988,8 @@ def admin_section_schedule_print(request, section_id):
         })
 
     time_slots = ['07:30']
-    for hour in range(8, 22):
-        for minute in ['00', '30']:
-            if hour == 21 and minute == '30':
-                break
-            time_slots.append(f"{hour:02d}:{minute}")
+    for hour in range(8, 21):
+        time_slots.append(f"{hour:02d}:30")
     time_slots.append('21:30')
 
     days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
@@ -1154,7 +1151,7 @@ def admin_section_schedule_print(request, section_id):
                 cells.append(schedule_map[(d, t)])
             else:
                 cells.append(None)
-        table_rows.append({'time': t, 'cells': cells})
+        table_rows.append({'time': t, 'time_label': _format_time_label(t), 'cells': cells})
 
     unique_course_ids = section.schedules.values_list('course', flat=True).distinct()
     totals = Course.objects.filter(id__in=unique_course_ids).aggregate(
