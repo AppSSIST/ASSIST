@@ -1027,8 +1027,10 @@ def admin_section_schedule_print(request, section_id):
         })
 
     time_slots = ['07:30']
-    for hour in range(8, 21):
-        time_slots.append(f"{hour:02d}:30")
+    for hour in range(8, 22):
+        time_slots.append(f"{hour:02d}:00")
+        if hour < 21:
+            time_slots.append(f"{hour:02d}:30")
     time_slots.append('21:30')
 
     days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
@@ -1213,6 +1215,404 @@ def admin_section_schedule_print(request, section_id):
     }
 
     return render(request, 'hello/section_schedule_print.html', context)
+
+
+@login_required(login_url='admin_login')
+def admin_faculty_schedule_print(request, faculty_id):
+    faculty = get_object_or_404(Faculty, id=faculty_id)
+    schedules = Schedule.objects.filter(faculty=faculty).select_related('course', 'section', 'room').order_by('day', 'start_time')
+
+    raw_schedules = []
+    for schedule in schedules:
+        raw_schedules.append({
+            'day': schedule.day,
+            'start_time': schedule.start_time,
+            'end_time': schedule.end_time,
+            'course_code': schedule.course.course_code,
+            'room': schedule.room.name if schedule.room else 'TBA',
+            'section_name': schedule.section.name,
+            'course_color': schedule.course.color,
+        })
+
+    time_slots = ['07:30']
+    for hour in range(8, 21):
+        time_slots.append(f"{hour:02d}:00")
+        if hour < 21:
+            time_slots.append(f"{hour:02d}:30")
+    time_slots.append('21:30')
+
+    days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+
+    def hex_to_rgba(hex_color, alpha=0.15):
+        hex_color = hex_color.lstrip('#')
+        try:
+            r = int(hex_color[0:2], 16)
+            g = int(hex_color[2:4], 16)
+            b = int(hex_color[4:6], 16)
+            return f'rgba({r}, {g}, {b}, {alpha})'
+        except Exception:
+            return 'rgba(255, 167, 38, 0.15)'
+
+    def _format_time_label(time_str):
+        try:
+            hours, minutes = map(int, str(time_str).split(':'))
+            suffix = 'AM' if hours < 12 else 'PM'
+            hour_12 = hours % 12 or 12
+            return f"{hour_12}:{minutes:02d} {suffix}"
+        except Exception:
+            return str(time_str)
+
+    def _normalize_time(val):
+        if val is None:
+            return None
+        if isinstance(val, str):
+            try:
+                parts = val.split(':')
+                h = int(parts[0])
+                m = int(parts[1]) if len(parts) > 1 else 0
+                return f"{h:02d}:{m:02d}"
+            except Exception:
+                return val
+        try:
+            return val.strftime('%H:%M')
+        except Exception:
+            return str(val)
+
+    def _to_minutes(tval):
+        if tval is None:
+            return None
+        if isinstance(tval, str):
+            try:
+                parts = tval.split(':')
+                h = int(parts[0])
+                m = int(parts[1]) if len(parts) > 1 else 0
+                return h * 60 + m
+            except Exception:
+                try:
+                    hhmm = tval.strip().split('.')[0]
+                    h, m = map(int, hhmm.split(':')[:2])
+                    return h * 60 + m
+                except Exception:
+                    return None
+        try:
+            return tval.hour * 60 + tval.minute
+        except Exception:
+            try:
+                s = str(tval)
+                h, m = map(int, s.split(':')[:2])
+                return h * 60 + m
+            except Exception:
+                return None
+
+    schedule_map = {}
+    covered = set()
+    for rs in raw_schedules:
+        day_idx = rs['day']
+        start = _normalize_time(rs['start_time'])
+        end = _normalize_time(rs['end_time'])
+        color = rs.get('course_color', '#FFA726')
+        rgba_color = hex_to_rgba(color)
+        if not start or not end:
+            key = (day_idx, start)
+            schedule_map[key] = {
+                'rowspan': 1,
+                'course_code': rs['course_code'],
+                'room': rs['room'],
+                'section_name': rs['section_name'],
+                'course_color': color,
+                'rgba_color': rgba_color,
+            }
+            continue
+
+        start_min = _to_minutes(start)
+        end_min = _to_minutes(end)
+        if end_min is not None and end_min > 21 * 60 + 30:
+            end_min = 21 * 60 + 30
+
+        if start_min is None or end_min is None:
+            key = (day_idx, start)
+            schedule_map[key] = {
+                'rowspan': 1,
+                'course_code': rs['course_code'],
+                'room': rs['room'],
+                'section_name': rs['section_name'],
+                'course_color': color,
+                'rgba_color': rgba_color,
+            }
+            continue
+
+        base_min = 7 * 60 + 30
+        start_index = (start_min - base_min) // 30
+        slots = max(1, (end_min - start_min) // 30)
+        start_index = max(0, min(start_index, len(time_slots) - 1))
+
+        key = (day_idx, time_slots[start_index])
+        schedule_map[key] = {
+            'rowspan': slots,
+            'course_code': rs['course_code'],
+            'room': rs['room'],
+            'section_name': rs['section_name'],
+            'course_color': color,
+            'rgba_color': rgba_color,
+        }
+        for j in range(1, slots):
+            idx = start_index + j
+            if 0 <= idx < len(time_slots):
+                time_slot_key = time_slots[idx]
+                if (day_idx, time_slot_key) not in schedule_map:
+                    covered.add((day_idx, time_slot_key))
+
+    time_covered = set()
+    time_rowspan_map = {}
+    for idx, t in enumerate(time_slots):
+        if t in time_covered:
+            continue
+        max_slots = 1
+        for d in range(6):
+            key = (d, t)
+            if key in schedule_map:
+                try:
+                    r = int(schedule_map[key].get('rowspan', 1))
+                except Exception:
+                    r = 1
+                max_slots = max(max_slots, r)
+        if max_slots > 1:
+            for j in range(1, max_slots):
+                next_idx = idx + j
+                if 0 <= next_idx < len(time_slots):
+                    time_covered.add(time_slots[next_idx])
+        time_rowspan_map[t] = max_slots
+
+    table_rows = []
+    for t in time_slots:
+        cells = []
+        for d in range(6):
+            if (d, t) in covered:
+                cells.append('skip')
+            elif (d, t) in schedule_map:
+                cells.append(schedule_map[(d, t)])
+            else:
+                cells.append(None)
+        table_rows.append({'time': t, 'time_label': _format_time_label(t), 'cells': cells})
+
+    unique_course_ids = faculty.schedules.values_list('course', flat=True).distinct()
+    totals = Course.objects.filter(id__in=unique_course_ids).aggregate(
+        total_lec=Sum('lecture_hours'),
+        total_lab=Sum('laboratory_hours'),
+        total_units=Sum('credit_units')
+    )
+
+    context = {
+        'user': request.user,
+        'faculty': faculty,
+        'table_rows': table_rows,
+        'time_slots': time_slots,
+        'days': days,
+        'total_lec': totals.get('total_lec') or 0,
+        'total_lab': totals.get('total_lab') or 0,
+        'total_units': totals.get('total_units') or 0,
+    }
+    return render(request, 'hello/faculty_schedule_print.html', context)
+
+
+@login_required(login_url='admin_login')
+def admin_room_schedule_print(request, room_id):
+    room = get_object_or_404(Room, id=room_id)
+    schedules = Schedule.objects.filter(room=room).select_related('course', 'section', 'faculty').order_by('day', 'start_time')
+
+    raw_schedules = []
+    for schedule in schedules:
+        raw_schedules.append({
+            'day': schedule.day,
+            'start_time': schedule.start_time,
+            'end_time': schedule.end_time,
+            'course_code': schedule.course.course_code,
+            'section_name': schedule.section.name,
+            'faculty_name': f"{schedule.faculty.first_name} {schedule.faculty.last_name}" if schedule.faculty else 'TBA',
+            'course_color': schedule.course.color,
+        })
+
+    time_slots = ['07:30']
+    for hour in range(8, 21):
+        time_slots.append(f"{hour:02d}:00")
+        if hour < 21:
+            time_slots.append(f"{hour:02d}:30")
+    time_slots.append('21:30')
+
+    days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+
+    def hex_to_rgba(hex_color, alpha=0.15):
+        hex_color = hex_color.lstrip('#')
+        try:
+            r = int(hex_color[0:2], 16)
+            g = int(hex_color[2:4], 16)
+            b = int(hex_color[4:6], 16)
+            return f'rgba({r}, {g}, {b}, {alpha})'
+        except Exception:
+            return 'rgba(255, 167, 38, 0.15)'
+
+    def _format_time_label(time_str):
+        try:
+            hours, minutes = map(int, str(time_str).split(':'))
+            suffix = 'AM' if hours < 12 else 'PM'
+            hour_12 = hours % 12 or 12
+            return f"{hour_12}:{minutes:02d} {suffix}"
+        except Exception:
+            return str(time_str)
+
+    def _normalize_time(val):
+        if val is None:
+            return None
+        if isinstance(val, str):
+            try:
+                parts = val.split(':')
+                h = int(parts[0])
+                m = int(parts[1]) if len(parts) > 1 else 0
+                return f"{h:02d}:{m:02d}"
+            except Exception:
+                return val
+        try:
+            return val.strftime('%H:%M')
+        except Exception:
+            return str(val)
+
+    def _to_minutes(tval):
+        if tval is None:
+            return None
+        if isinstance(tval, str):
+            try:
+                parts = tval.split(':')
+                h = int(parts[0])
+                m = int(parts[1]) if len(parts) > 1 else 0
+                return h * 60 + m
+            except Exception:
+                try:
+                    hhmm = tval.strip().split('.')[0]
+                    h, m = map(int, hhmm.split(':')[:2])
+                    return h * 60 + m
+                except Exception:
+                    return None
+        try:
+            return tval.hour * 60 + tval.minute
+        except Exception:
+            try:
+                s = str(tval)
+                h, m = map(int, s.split(':')[:2])
+                return h * 60 + m
+            except Exception:
+                return None
+
+    schedule_map = {}
+    covered = set()
+    for rs in raw_schedules:
+        day_idx = rs['day']
+        start = _normalize_time(rs['start_time'])
+        end = _normalize_time(rs['end_time'])
+        if not start or not end:
+            key = (day_idx, start)
+            color = rs.get('course_color', '#FFA726')
+            schedule_map[key] = {
+                'rowspan': 1,
+                'course_code': rs['course_code'],
+                'section_name': rs['section_name'],
+                'faculty_name': rs['faculty_name'],
+                'course_color': color,
+                'rgba_color': hex_to_rgba(color),
+            }
+            continue
+
+        start_min = _to_minutes(start)
+        end_min = _to_minutes(end)
+        if end_min is not None and end_min > 21 * 60 + 30:
+            end_min = 21 * 60 + 30
+
+        if start_min is None or end_min is None:
+            key = (day_idx, start)
+            color = rs.get('course_color', '#FFA726')
+            schedule_map[key] = {
+                'rowspan': 1,
+                'course_code': rs['course_code'],
+                'section_name': rs['section_name'],
+                'faculty_name': rs['faculty_name'],
+                'course_color': color,
+                'rgba_color': hex_to_rgba(color),
+            }
+            continue
+
+        base_min = 7 * 60 + 30
+        start_index = (start_min - base_min) // 30
+        slots = max(1, (end_min - start_min) // 30)
+        start_index = max(0, min(start_index, len(time_slots) - 1))
+
+        key = (day_idx, time_slots[start_index])
+        color = rs.get('course_color', '#FFA726')
+        schedule_map[key] = {
+            'rowspan': slots,
+            'course_code': rs['course_code'],
+            'section_name': rs['section_name'],
+            'faculty_name': rs['faculty_name'],
+            'course_color': color,
+            'rgba_color': hex_to_rgba(color),
+        }
+        for j in range(1, slots):
+            idx = start_index + j
+            if 0 <= idx < len(time_slots):
+                time_slot_key = time_slots[idx]
+                if (day_idx, time_slot_key) not in schedule_map:
+                    covered.add((day_idx, time_slot_key))
+
+    time_covered = set()
+    time_rowspan_map = {}
+    for idx, t in enumerate(time_slots):
+        if t in time_covered:
+            continue
+        max_slots = 1
+        for d in range(6):
+            key = (d, t)
+            if key in schedule_map:
+                try:
+                    r = int(schedule_map[key].get('rowspan', 1))
+                except Exception:
+                    r = 1
+                max_slots = max(max_slots, r)
+        if max_slots > 1:
+            for j in range(1, max_slots):
+                next_idx = idx + j
+                if 0 <= next_idx < len(time_slots):
+                    time_covered.add(time_slots[next_idx])
+        time_rowspan_map[t] = max_slots
+
+    table_rows = []
+    for t in time_slots:
+        cells = []
+        for d in range(6):
+            if (d, t) in covered:
+                cells.append('skip')
+            elif (d, t) in schedule_map:
+                cells.append(schedule_map[(d, t)])
+            else:
+                cells.append(None)
+        table_rows.append({'time': t, 'time_label': _format_time_label(t), 'cells': cells})
+
+    unique_course_ids = room.schedules.values_list('course', flat=True).distinct()
+    totals = Course.objects.filter(id__in=unique_course_ids).aggregate(
+        total_lec=Sum('lecture_hours'),
+        total_lab=Sum('laboratory_hours'),
+        total_units=Sum('credit_units')
+    )
+
+    context = {
+        'user': request.user,
+        'room': room,
+        'table_rows': table_rows,
+        'time_slots': time_slots,
+        'days': days,
+        'total_lec': totals.get('total_lec') or 0,
+        'total_lab': totals.get('total_lab') or 0,
+        'total_units': totals.get('total_units') or 0,
+    }
+    return render(request, 'hello/room_schedule_print.html', context)
+
 
 @login_required(login_url='admin_login')
 def toggle_section_status(request, section_id):
@@ -1403,6 +1803,17 @@ def staff_schedule_print(request):
     """
     Print-friendly view for staff teaching assignment
     """
+    def hex_to_rgba(hex_color, alpha=0.15):
+        """Convert hex color to rgba format"""
+        hex_color = hex_color.lstrip('#')
+        try:
+            r = int(hex_color[0:2], 16)
+            g = int(hex_color[2:4], 16)
+            b = int(hex_color[4:6], 16)
+            return f'rgba({r}, {g}, {b}, {alpha})'
+        except (ValueError, IndexError):
+            return 'rgba(255, 167, 38, 0.15)'
+    
     try:
         faculty = Faculty.objects.get(user=request.user)
     except Faculty.DoesNotExist:
@@ -1427,6 +1838,7 @@ def staff_schedule_print(request):
             'course_code': schedule.course.course_code,
             'room': schedule.room.name if schedule.room else 'TBA',
             'section_name': schedule.section.name,
+            'course_color': schedule.course.color,
         })
 
     # Generate 30-minute time slots from 07:30 to 21:30 (skip 07:00)
@@ -1512,11 +1924,14 @@ def staff_schedule_print(request):
         end = _normalize_time(rs['end_time'])
         if not start or not end:
             key = (day_idx, start)
+            color = rs.get('course_color', '#FFA726')
             schedule_map[key] = {
                 'rowspan': 1,
                 'course_code': rs['course_code'],
                 'room': rs['room'],
                 'section_name': rs['section_name'],
+                'course_color': color,
+                'rgba_color': hex_to_rgba(color),
             }
             continue
 
@@ -1561,11 +1976,14 @@ def staff_schedule_print(request):
 
         if start_min is None or end_min is None:
             key = (day_idx, start)
+            color = rs.get('course_color', '#FFA726')
             schedule_map[key] = {
                 'rowspan': 1,
                 'course_code': rs['course_code'],
                 'room': rs['room'],
                 'section_name': rs['section_name'],
+                'course_color': color,
+                'rgba_color': hex_to_rgba(color),
             }
             continue
 
@@ -1594,11 +2012,14 @@ def staff_schedule_print(request):
             pass
         # Use time_slots[start_index] as the key to ensure it matches exactly what's in time_slots
         key = (day_idx, time_slots[start_index])
+        color = rs.get('course_color', '#FFA726')
         schedule_map[key] = {
             'rowspan': slots,
             'course_code': rs['course_code'],
             'room': rs['room'],
             'section_name': rs['section_name'],
+            'course_color': color,
+            'rgba_color': hex_to_rgba(color),
         }
         for j in range(1, slots):
             # Protect index range
@@ -1659,7 +2080,7 @@ def staff_schedule_print(request):
                 'text': t,
                 'rowspan': time_rowspan_map.get(t, 1)
             }
-        table_rows.append({'time': t, 'time_cell': time_cell, 'cells': cells})
+        table_rows.append({'time': t, 'time_label': _format_time_label(t), 'time_cell': time_cell, 'cells': cells})
 
     # Compute totals based on unique courses assigned to this faculty.
     unique_course_ids = faculty.schedules.values_list('course', flat=True).distinct()

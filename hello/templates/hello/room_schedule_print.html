@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Recommended Teaching Assignment - {{ faculty.first_name }} {{ faculty.last_name }}</title>
+    <title>Recommended Teaching Assignment - {{ room.name }}</title>
     <style>
         * {
             margin: 0;
@@ -157,6 +157,32 @@
             border-top: 6px solid #000;
         }
 
+        .faculty-info {
+            margin-top: 8px;
+            font-size: 9px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .info-row {
+            display: flex;
+            margin-bottom: 5px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            width: 140px;
+            min-width: 140px;
+        }
+
+        .info-value {
+            border-bottom: 1px solid #000;
+            flex: 1;
+            padding-left: 5px;
+            min-height: 16px;
+        }
+
         .schedule-meta {
             margin: 0 0 10px 0;
             font-size: 10px;
@@ -179,6 +205,55 @@
             padding: 0 8px;
             min-width: 120px;
             display: inline-block;
+        }
+
+        .units-section {
+            margin-top: 10px;
+            font-size: 9px;
+        }
+
+        .units-row {
+            display: grid;
+            grid-template-columns: 50px 50px 50px;
+            gap: 10px;
+        }
+
+        .units-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .units-value {
+            height: 20px;
+            border-bottom: 1px solid #000;
+            width: 100%;
+            text-align: center;
+        }
+
+        .units-label {
+            font-size: 8px;
+            margin-top: 2px;
+        }
+
+        .signature-section {
+            margin-top: 10px;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+            font-size: 8px;
+            page-break-inside: avoid;
+        }
+
+        .signature-box {
+            text-align: center;
+        }
+
+        .signature-line {
+            border-top: 1px solid #000;
+            margin-top: 12px;
+            padding-top: 2px;
+            font-size: 8px;
         }
 
         .info-box-row {
@@ -233,13 +308,6 @@
             display: inline-flex;
             align-items: center;
             gap: 4px;
-        }
-
-        .checkbox {
-            width: 12px;
-            height: 12px;
-            border: 1px solid #000;
-            display: inline-block;
         }
 
         .units-summary {
@@ -300,26 +368,6 @@
             min-height: 16px;
         }
 
-        .signature-section {
-            margin-top: 10px;
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 12px;
-            font-size: 8px;
-            page-break-inside: avoid;
-        }
-
-        .signature-box {
-            text-align: center;
-        }
-
-        .signature-line {
-            border-top: 1px solid #000;
-            margin-top: 12px;
-            padding-top: 2px;
-            font-size: 8px;
-        }
-
         .print-actions {
             text-align: center;
             margin: 20px 0;
@@ -369,7 +417,7 @@
     <div class="print-actions">
         <button onclick="window.print()">🖨️ Print</button>
         <button onclick="downloadPDF()">📥 Download PDF</button>
-        <button onclick="window.location.href='{% url 'staff_schedule' %}'">✕ Close</button>
+        <button onclick="window.location.href='{% url 'room_view' %}'">✕ Close</button>
     </div>
 
     <div class="print-container">
@@ -381,10 +429,10 @@
 
         <div class="print-schedule-container">
             <div class="schedule-meta">
-                <strong>Staff:</strong>
-                <span class="meta-line">{{ faculty.first_name }} {{ faculty.last_name }}</span>
-                <strong>Department:</strong>
-                <span class="meta-line">{{ faculty.department|default:"" }}</span>
+                <strong>Room:</strong>
+                <span class="meta-line">{{ room.name }}</span>
+                <strong>Campus:</strong>
+                <span class="meta-line">{{ room.get_campus_display }}</span>
             </div>
             <table class="schedule-table">
                 <thead>
@@ -410,7 +458,8 @@
                                     <div class="schedule-cell-arrow"></div>
                                     <div class="schedule-cell-content">
                                         <div><strong>{{ cell.course_code }}</strong></div>
-                                        <div style="font-size:7px; margin-top:2px;">{{ cell.room }}</div>
+                                        <div style="font-size:7px; margin-top:2px;">{{ cell.section_name }}</div>
+                                        <div style="font-size:7px; margin-top:2px;">Faculty: {{ cell.faculty_name }}</div>
                                     </div>
                                 </td>
                             {% else %}
@@ -426,27 +475,24 @@
         <div class="info-box-row">
             <div class="info-box">
                 <div class="info-row">
-                    <div class="info-label">Name of Faculty:</div>
-                    <div class="info-value">{{ faculty.first_name }} {{ faculty.middle_name|default:"" }} {{ faculty.last_name }}</div>
+                    <div class="info-label">Room Name:</div>
+                    <div class="info-value">{{ room.name }}</div>
                 </div>
                 <div class="info-row">
-                    <div class="info-label">Employment Status (FT, PT, SIL/IL):</div>
-                    <div class="info-value">{{ faculty.employment_status|default:"" }}</div>
+                    <div class="info-label">Room Number:</div>
+                    <div class="info-value">{{ room.room_number }}</div>
                 </div>
                 <div class="info-row">
-                    <div class="info-label">Highest Degree Earned:</div>
-                    <div class="degree-options">
-                        <span><span class="checkbox"></span>Master's Degree</span>
-                        <span><span class="checkbox"></span>Doctoral Degree</span>
-                    </div>
+                    <div class="info-label">Campus:</div>
+                    <div class="info-value">{{ room.get_campus_display }}</div>
                 </div>
                 <div class="info-row">
-                    <div class="info-label">PRC License (as applicable):</div>
-                    <div class="info-value">{{ faculty.prc_license|default:"" }}</div>
+                    <div class="info-label">Room Type:</div>
+                    <div class="info-value">{{ room.get_room_type_display }}</div>
                 </div>
                 <div class="info-row">
-                    <div class="info-label">Specialization/Subject Matter Expertise:</div>
-                    <div class="info-value">{{ faculty.specialization.all|join:", "|default:"" }}</div>
+                    <div class="info-label">Capacity:</div>
+                    <div class="info-value">{{ room.capacity }}</div>
                 </div>
             </div>
             <div class="units-summary">
@@ -496,7 +542,7 @@
             const element = document.querySelector('.print-container');
             const opt = {
                 margin: 0.35,
-                filename: 'Teaching_Assignment_{{ faculty.first_name }}_{{ faculty.last_name }}.pdf',
+                filename: 'Room_Schedule_{{ room.name }}.pdf',
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2 },
                 jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }

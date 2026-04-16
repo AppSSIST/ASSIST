@@ -36,7 +36,7 @@
         .print-container {
             background: white;
             width: 8.5in;
-            min-height: 1600px;
+            min-height: auto;
             margin: 20px auto;
             padding: 0.35in;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
@@ -89,19 +89,26 @@
         }
 
         .colleges-section {
-            display: flex;
-            gap: 15px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px 16px;
             font-size: 9px;
-            margin-bottom: 12px;
-            flex-wrap: wrap;
-            padding: 0;
+            margin: 0 auto 14px;
+            width: min(100%, 640px);
+            max-width: 640px;
+            justify-items: center;
+            align-items: center;
+            text-align: center;
+            padding: 0 10px;
         }
 
         .college-checkbox {
             display: flex;
+            justify-content: center;
             gap: 4px;
             white-space: nowrap;
             align-items: center;
+            width: 100%;
         }
 
         .checkbox {
@@ -122,11 +129,7 @@
         }
 
         .section-info {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            font-size: 10px;
-            margin-bottom: 10px;
+            display: none;
         }
 
         .section-info div {
@@ -164,17 +167,18 @@
         .schedule-table th,
         .schedule-table td {
             border: 1px solid #000;
-            padding: 8px 4px;
+            padding: 6px 3px;
             text-align: center;
-            min-height: 100px;
-            font-size: 9px;
+            min-height: 20px;
+            font-size: 8px;
+            line-height: 1.1;
         }
 
         .schedule-table th {
             background-color: #f0f0f0;
             font-weight: bold;
-            font-size: 9px;
-            min-height: 35px;
+            font-size: 8px;
+            min-height: 26px;
             padding: 8px 2px;
         }
 
@@ -183,7 +187,8 @@
             background-color: #f9f9f9;
             font-weight: bold;
             font-size: 8px;
-            padding: 2px;
+            padding: 4px 2px;
+            min-height: 20px;
         }
 
         .schedule-table .day-col {
@@ -194,12 +199,12 @@
             font-size: 8px;
             vertical-align: top;
             position: relative;
-            padding: 12px 6px;
+            padding: 6px 4px;
             text-align: left;
             line-height: 1.1;
             border-left: 1px solid;
             overflow: hidden;
-            min-height: 120px;
+            min-height: 30px;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
         }
@@ -241,6 +246,152 @@
             gap: 8px;
         }
 
+        .schedule-meta {
+            margin: 0 0 10px 0;
+            font-size: 10px;
+            width: max-content;
+            display: inline-flex;
+            flex-wrap: wrap;
+            gap: 8px 12px;
+            align-items: center;
+            justify-content: flex-start;
+            text-align: left;
+            padding-left: 2px;
+        }
+
+        .schedule-meta strong {
+            font-weight: bold;
+        }
+
+        .meta-line {
+            border-bottom: 1px solid #000;
+            padding: 0 8px;
+            min-width: 120px;
+            display: inline-block;
+        }
+
+        .info-box-row {
+            display: flex;
+            gap: 18px;
+            align-items: flex-start;
+            margin-top: 10px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .info-box {
+            border: 1px solid #000;
+            padding: 10px;
+            width: 100%;
+            max-width: 56%;
+            box-sizing: border-box;
+        }
+
+        .info-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+
+        .info-label {
+            font-weight: bold;
+            min-width: 140px;
+            font-size: 9px;
+            white-space: nowrap;
+        }
+
+        .info-value {
+            border-bottom: 1px solid #000;
+            flex: 1;
+            padding-left: 4px;
+            min-height: 16px;
+            font-size: 9px;
+            max-width: calc(100% - 140px);
+        }
+
+        .degree-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            font-size: 9px;
+            align-items: center;
+        }
+
+        .degree-options span {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .units-summary {
+            border: 1px solid #000;
+            padding: 10px;
+            width: 100%;
+            max-width: 32%;
+            box-sizing: border-box;
+            font-size: 9px;
+        }
+
+        .units-summary .units-header,
+        .units-summary .unit-row {
+            display: grid;
+            grid-template-columns: minmax(40px, auto) repeat(3, minmax(42px, 1fr));
+            gap: 8px 10px;
+            align-items: center;
+            justify-items: center;
+        }
+
+        .units-summary .units-header {
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .units-summary .units-header > div:first-child,
+        .units-summary .unit-row > .units-label {
+            justify-self: start;
+        }
+
+        .units-summary .unit-row {
+            margin-bottom: 10px;
+        }
+
+        .units-summary .unit-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .units-summary .units-label {
+            text-align: left;
+            font-weight: bold;
+            white-space: nowrap;
+            padding-bottom: 2px;
+        }
+
+        .units-summary .units-value {
+            border-bottom: 1px solid #000;
+            text-align: center;
+            min-width: 36px;
+            min-height: 22px;
+            padding: 6px 0 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .units-summary .units-value.empty {
+            min-height: 16px;
+        }
+
+        .units-summary .units-value {
+            min-height: 16px;
+            border-bottom: 1px solid #000;
+            width: 100%;
+            text-align: center;
+            font-size: 9px;
+            padding: 2px 0;
+            box-sizing: border-box;
+        }
+
         .units-section {
             margin-top: 10px;
             font-size: 9px;
@@ -271,11 +422,11 @@
         }
 
         .signature-section {
-            margin-top: 15px;
+            margin-top: 10px;
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
-            gap: 20px;
-            font-size: 9px;
+            gap: 12px;
+            font-size: 8px;
             page-break-inside: avoid;
         }
 
@@ -347,7 +498,7 @@
         <div class="header">
             <div class="header-logo">TIP - TECHNOLOGICAL INSTITUTE OF THE PHILIPPINES</div>
             <div class="header-title">RECOMMENDED TEACHING ASSIGNMENT</div>
-            <div class="header-ref">TIP-ACAD-004 | Revision Status/Date: 01/2025</div>
+            <div class="header-ref">TIP-ACAD-004 | Revision Status/Date: {% now 'n/j/Y' %}</div>
         </div>
 
         <div class="colleges-section">
@@ -377,21 +528,13 @@
             </div>
         </div>
 
-        <div class="section-info">
-            <div><span class="info-label">Section:</span><span class="info-value">{{ section.name }}</span></div>
-            <div><span class="info-label">Curriculum:</span><span class="info-value">{{ section.curriculum.name }} ({{ section.curriculum.year }})</span></div>
-            <div><span class="info-label">Year Level:</span><span class="info-value">{{ section.get_year_level_display }}</span></div>
-            <div><span class="info-label">Semester:</span><span class="info-value">{{ section.get_semester_display }}</span></div>
-        </div>
-
-        <div style="margin-bottom: 8px; font-size: 10px;">
-            <strong>Program:</strong>
-            <span style="border-bottom: 1px solid #000; padding: 0 10px; width: 220px; display: inline-block;">{{ section.curriculum.name }}</span>
-            <strong style="margin-left: 20px;">Semester, S.Y.:</strong>
-            <span style="border-bottom: 1px solid #000; padding: 0 10px; width: 170px; display: inline-block;">{{ section.get_semester_display }} / {{ section.curriculum.year }}</span>
-        </div>
-
         <div class="print-schedule-container">
+            <div class="schedule-meta">
+                <strong>Program:</strong>
+                <span class="meta-line">{{ section.curriculum.name }}</span>
+                <strong>Semester, S.Y.:</strong>
+                <span class="meta-line">{{ section.get_semester_display }} / {{ section.curriculum.year }}</span>
+            </div>
             <table class="schedule-table">
                 <thead>
                     <tr>
@@ -429,20 +572,56 @@
             </table>
         </div>
 
-        <div class="units-section">
-            <div style="margin-bottom: 5px; font-weight: bold;">Units</div>
-            <div class="units-row">
-                <div class="units-item">
-                    <div class="units-value">{{ total_lec|default:"" }}</div>
+        <div class="info-box-row">
+            <div class="info-box">
+                <div class="info-row">
+                    <div class="info-label">Name of Faculty:</div>
+                    <div class="info-value"></div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Employment Status (FT, PT, SIL/IL):</div>
+                    <div class="info-value"></div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Highest Degree Earned:</div>
+                    <div class="degree-options">
+                        <span><span class="checkbox"></span>Master's Degree</span>
+                        <span><span class="checkbox"></span>Doctoral Degree</span>
+                    </div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">PRC License (as applicable):</div>
+                    <div class="info-value"></div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Specialization/Subject Matter Expertise:</div>
+                    <div class="info-value"></div>
+                </div>
+            </div>
+            <div class="units-summary">
+                <div class="units-header">
+                    <div></div>
+                    <div>UNITS</div>
+                    <div>CURR HR</div>
+                    <div>PAY HR</div>
+                </div>
+                <div class="unit-row">
                     <div class="units-label">Lec</div>
+                    <div class="units-value">{{ total_lec|default:"" }}</div>
+                    <div class="units-value empty"></div>
+                    <div class="units-value empty"></div>
                 </div>
-                <div class="units-item">
-                    <div class="units-value">{{ total_lab|default:"" }}</div>
+                <div class="unit-row">
                     <div class="units-label">Lab</div>
+                    <div class="units-value">{{ total_lab|default:"" }}</div>
+                    <div class="units-value empty"></div>
+                    <div class="units-value empty"></div>
                 </div>
-                <div class="units-item">
+                <div class="unit-row">
+                    <div class="units-label">Total</div>
                     <div class="units-value">{{ total_units|default:"" }}</div>
-                    <div class="units-label">TOTAL</div>
+                    <div class="units-value empty"></div>
+                    <div class="units-value empty"></div>
                 </div>
             </div>
         </div>

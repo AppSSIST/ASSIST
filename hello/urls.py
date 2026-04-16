@@ -32,6 +32,8 @@ urlpatterns = [
     # Schedules
     path('admin/schedule/', views.schedule_view, name='schedule_view'),
     path('admin/section/<int:section_id>/schedule/print/', views.admin_section_schedule_print, name='admin_section_schedule_print'),
+    path('admin/faculty/<int:faculty_id>/schedule/print/', views.admin_faculty_schedule_print, name='admin_faculty_schedule_print'),
+    path('admin/room/<int:room_id>/schedule/print/', views.admin_room_schedule_print, name='admin_room_schedule_print'),
     path('admin/schedule/add/', views.add_schedule, name='add_schedule'),
     path('admin/schedule/delete/<int:schedule_id>/', views.delete_schedule, name='delete_schedule'),
     path('admin/schedule/edit/<int:schedule_id>/', views.edit_schedule, name='edit_schedule'),

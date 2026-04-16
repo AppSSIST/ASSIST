@@ -1023,13 +1023,13 @@
 
         function exportSchedule() {
             if (currentFacultyId) {
-                window.location.href = `/admin/faculty/${currentFacultyId}/export-pdf/`;
+                window.open(`/admin/faculty/${currentFacultyId}/schedule/print?download=1`, '_blank');
             }
         }
 
         function printSchedule() {
             if (currentFacultyId) {
-                window.print();
+                window.open(`/admin/faculty/${currentFacultyId}/schedule/print?print=1`, '_blank');
             }
         }
     </script>

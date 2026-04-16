@@ -255,12 +255,12 @@
 
         // Print schedule
         function printSchedule() {
-            window.location.href = "{% url 'staff_schedule_print' %}";
+            window.open("{% url 'staff_schedule_print' %}?print=1", '_blank');
         }
 
         // Export schedule to PDF
         function exportSchedule() {
-            window.location.href = "{% url 'staff_schedule_print' %}";
+            window.open("{% url 'staff_schedule_print' %}?download=1", '_blank');
         }
 
         // Close dropdowns when clicking outside

@@ -157,6 +157,38 @@
             border-top: 6px solid #000;
         }
 
+        .faculty-info {
+            margin-top: 8px;
+            font-size: 9px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .info-row {
+            display: grid;
+            grid-template-columns: minmax(120px, auto) 1fr;
+            gap: 8px;
+            margin-bottom: 8px;
+            align-items: start;
+        }
+
+        .info-label {
+            font-weight: bold;
+            min-width: 120px;
+            font-size: 9px;
+            white-space: nowrap;
+        }
+
+        .info-value {
+            border-bottom: 1px solid #000;
+            padding-left: 5px;
+            min-height: 16px;
+            overflow-wrap: break-word;
+            word-break: break-word;
+            white-space: normal;
+        }
+
         .schedule-meta {
             margin: 0 0 10px 0;
             font-size: 10px;
@@ -179,6 +211,55 @@
             padding: 0 8px;
             min-width: 120px;
             display: inline-block;
+        }
+
+        .units-section {
+            margin-top: 10px;
+            font-size: 9px;
+        }
+
+        .units-row {
+            display: grid;
+            grid-template-columns: 50px 50px 50px;
+            gap: 10px;
+        }
+
+        .units-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .units-value {
+            height: 20px;
+            border-bottom: 1px solid #000;
+            width: 100%;
+            text-align: center;
+        }
+
+        .units-label {
+            font-size: 8px;
+            margin-top: 2px;
+        }
+
+        .signature-section {
+            margin-top: 10px;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+            font-size: 8px;
+            page-break-inside: avoid;
+        }
+
+        .signature-box {
+            text-align: center;
+        }
+
+        .signature-line {
+            border-top: 1px solid #000;
+            margin-top: 12px;
+            padding-top: 2px;
+            font-size: 8px;
         }
 
         .info-box-row {
@@ -233,13 +314,6 @@
             display: inline-flex;
             align-items: center;
             gap: 4px;
-        }
-
-        .checkbox {
-            width: 12px;
-            height: 12px;
-            border: 1px solid #000;
-            display: inline-block;
         }
 
         .units-summary {
@@ -300,26 +374,6 @@
             min-height: 16px;
         }
 
-        .signature-section {
-            margin-top: 10px;
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 12px;
-            font-size: 8px;
-            page-break-inside: avoid;
-        }
-
-        .signature-box {
-            text-align: center;
-        }
-
-        .signature-line {
-            border-top: 1px solid #000;
-            margin-top: 12px;
-            padding-top: 2px;
-            font-size: 8px;
-        }
-
         .print-actions {
             text-align: center;
             margin: 20px 0;
@@ -369,7 +423,7 @@
     <div class="print-actions">
         <button onclick="window.print()">🖨️ Print</button>
         <button onclick="downloadPDF()">📥 Download PDF</button>
-        <button onclick="window.location.href='{% url 'staff_schedule' %}'">✕ Close</button>
+        <button onclick="window.location.href='{% url 'faculty_view' %}'">✕ Close</button>
     </div>
 
     <div class="print-container">
@@ -381,7 +435,7 @@
 
         <div class="print-schedule-container">
             <div class="schedule-meta">
-                <strong>Staff:</strong>
+                <strong>Faculty:</strong>
                 <span class="meta-line">{{ faculty.first_name }} {{ faculty.last_name }}</span>
                 <strong>Department:</strong>
                 <span class="meta-line">{{ faculty.department|default:"" }}</span>
@@ -410,7 +464,8 @@
                                     <div class="schedule-cell-arrow"></div>
                                     <div class="schedule-cell-content">
                                         <div><strong>{{ cell.course_code }}</strong></div>
-                                        <div style="font-size:7px; margin-top:2px;">{{ cell.room }}</div>
+                                        <div style="font-size:7px; margin-top:2px;">{{ cell.section_name }}</div>
+                                        <div style="font-size:7px; margin-top:2px;">Room: {{ cell.room }}</div>
                                     </div>
                                 </td>
                             {% else %}

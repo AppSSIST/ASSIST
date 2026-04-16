@@ -745,13 +745,13 @@
 
         function exportSchedule() {
             if (currentRoomId) {
-                window.location.href = `/admin/room/${currentRoomId}/export-pdf/`;
+                window.open(`/admin/room/${currentRoomId}/schedule/print?download=1`, '_blank');
             }
         }
 
         function printSchedule() {
             if (currentRoomId) {
-                window.print();
+                window.open(`/admin/room/${currentRoomId}/schedule/print?print=1`, '_blank');
             }
         }
 

@@ -816,13 +816,13 @@
 
         function exportSchedule() {
             if (currentSectionId) {
-                window.location.href = `/admin/section/${currentSectionId}/export-pdf/`;
+                window.open(`/admin/section/${currentSectionId}/schedule/print?download=1`, '_blank');
             }
         }
 
         function printSchedule() {
             if (currentSectionId) {
-                window.print();
+                window.open(`/admin/section/${currentSectionId}/schedule/print?print=1`, '_blank');
             }
         }
 
