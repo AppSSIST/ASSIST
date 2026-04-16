@@ -37,7 +37,7 @@ urlpatterns = [
     path('admin/schedule/add/', views.add_schedule, name='add_schedule'),
     path('admin/schedule/delete/<int:schedule_id>/', views.delete_schedule, name='delete_schedule'),
     path('admin/schedule/edit/<int:schedule_id>/', views.edit_schedule, name='edit_schedule'),
-
+    
     # Curriculum operations
     path('admin/curriculum/add/', views.add_curriculum, name='add_curriculum'),
     path('admin/curriculum/delete/<int:curriculum_id>/', views.delete_curriculum, name='delete_curriculum'),
@@ -100,8 +100,22 @@ urlpatterns = [
     path('api/faculty-list/', views.get_faculty_list, name='api_faculty_list'),
     path('api/my-schedule/', views.api_my_schedule, name='api_my_schedule'),
     path('api/faculty/<int:faculty_id>/schedule-data/', views.api_faculty_schedule, name='api_faculty_schedule'),
+    path('api/section/<int:section_id>/schedule-data/', views.api_section_schedule, name='api_section_schedule'),
+    path('api/room/<int:room_id>/schedule-data/', views.api_room_schedule, name='api_room_schedule'),
     path('api/courses/', views.get_courses, name='api_courses'),
     path('api/courses/<int:course_id>/', views.course_detail, name='course_detail'),
     path('api/courses/add/', views.api_add_course, name='api_add_course'),
+    
+    # Mobile app schedule print API endpoints
+    path('api/schedule/staff/html/', views.staff_schedule_html, name='api_staff_schedule_html'),
+    path('api/schedule/staff/pdf/', views.staff_schedule_pdf, name='api_staff_schedule_pdf'),
+    path('api/schedule/faculty/html/', views.faculty_schedule_html, name='api_faculty_schedule_html'),
+    path('api/schedule/faculty/pdf/', views.faculty_schedule_pdf, name='api_faculty_schedule_pdf'),
+    path('api/schedule/faculty/<int:faculty_id>/html/', views.api_faculty_schedule_html, name='api_faculty_schedule_html_id'),
+    path('api/schedule/faculty/<int:faculty_id>/pdf/', views.api_faculty_schedule_pdf, name='api_faculty_schedule_pdf_id'),
+    path('api/schedule/section/<int:section_id>/html/', views.api_section_schedule_html, name='api_section_schedule_html'),
+    path('api/schedule/section/<int:section_id>/pdf/', views.api_section_schedule_pdf, name='api_section_schedule_pdf'),
+    path('api/schedule/room/<int:room_id>/html/', views.api_room_schedule_html, name='api_room_schedule_html'),
+    path('api/schedule/room/<int:room_id>/pdf/', views.api_room_schedule_pdf, name='api_room_schedule_pdf'),
 ]
 

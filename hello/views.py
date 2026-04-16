@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.http import JsonResponse, Http404
+from django.http import JsonResponse, Http404, HttpResponse
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
@@ -21,7 +21,7 @@ import string
 from .models import Course, Curriculum, Activity, Faculty, Section, Schedule, Room
 from .forms import CourseForm, CurriculumForm
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 
@@ -2105,6 +2105,633 @@ def staff_schedule_print(request):
 
     return render(request, 'hello/staff_schedule_print.html', context)
 
+# ===== MOBILE API ENDPOINTS =====
+
+def _build_room_schedule_context(room):
+    """Helper function to build schedule context for a room"""
+    def hex_to_rgba(hex_color, alpha=0.15):
+        hex_color = hex_color.lstrip('#')
+        try:
+            r = int(hex_color[0:2], 16)
+            g = int(hex_color[2:4], 16)
+            b = int(hex_color[4:6], 16)
+            return f'rgba({r}, {g}, {b}, {alpha})'
+        except:
+            return 'rgba(255, 167, 38, 0.15)'
+    
+    schedules = Schedule.objects.filter(room=room).select_related('course', 'section', 'faculty').order_by('day', 'start_time')
+    
+    raw_schedules = []
+    for schedule in schedules:
+        raw_schedules.append({
+            'day': schedule.day,
+            'start_time': schedule.start_time,
+            'end_time': schedule.end_time,
+            'course_code': schedule.course.course_code,
+            'section_name': schedule.section.name,
+            'faculty_name': f"{schedule.faculty.first_name} {schedule.faculty.last_name}" if schedule.faculty else 'TBA',
+            'course_color': schedule.course.color,
+        })
+    
+    time_slots = ['07:30']
+    for hour in range(8, 22):
+        for minute in ['00', '30']:
+            if hour == 21 and minute == '30':
+                break
+            time_slots.append(f"{hour:02d}:{minute}")
+    time_slots.append("21:30")
+    
+    days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+    
+    def _format_time_label(time_str):
+        try:
+            hours, minutes = map(int, str(time_str).split(':'))
+            suffix = 'AM' if hours < 12 else 'PM'
+            hour_12 = hours % 12 or 12
+            return f"{hour_12}:{minutes:02d} {suffix}"
+        except:
+            return str(time_str)
+    
+    def _normalize_time(val):
+        if val is None:
+            return None
+        if isinstance(val, str):
+            try:
+                parts = val.split(':')
+                h = int(parts[0])
+                m = int(parts[1]) if len(parts) > 1 else 0
+                return f"{h:02d}:{m:02d}"
+            except:
+                return val
+        try:
+            return val.strftime('%H:%M')
+        except:
+            return str(val)
+    
+    def _to_minutes(tval):
+        if tval is None:
+            return None
+        if isinstance(tval, str):
+            try:
+                parts = tval.split(':')
+                h = int(parts[0])
+                m = int(parts[1]) if len(parts) > 1 else 0
+                return h * 60 + m
+            except:
+                try:
+                    hhmm = tval.strip().split('.')[0]
+                    h, m = map(int, hhmm.split(':')[:2])
+                    return h * 60 + m
+                except:
+                    return None
+        try:
+            return tval.hour * 60 + tval.minute
+        except:
+            try:
+                s = str(tval)
+                h, m = map(int, s.split(':')[:2])
+                return h * 60 + m
+            except:
+                return None
+    
+    schedule_map = {}
+    covered = set()
+    
+    for rs in raw_schedules:
+        day_idx = rs['day']
+        start = _normalize_time(rs['start_time'])
+        end = _normalize_time(rs['end_time'])
+        if not start or not end:
+            key = (day_idx, start)
+            color = rs.get('course_color', '#FFA726')
+            schedule_map[key] = {
+                'rowspan': 1,
+                'course_code': rs['course_code'],
+                'section_name': rs['section_name'],
+                'faculty_name': rs['faculty_name'],
+                'course_color': color,
+                'rgba_color': hex_to_rgba(color),
+            }
+            continue
+        
+        start_min = _to_minutes(start)
+        end_min = _to_minutes(end)
+        if end_min is not None and end_min > 21 * 60 + 30:
+            end_min = 21 * 60 + 30
+        
+        if start_min is None or end_min is None:
+            key = (day_idx, start)
+            color = rs.get('course_color', '#FFA726')
+            schedule_map[key] = {
+                'rowspan': 1,
+                'course_code': rs['course_code'],
+                'section_name': rs['section_name'],
+                'faculty_name': rs['faculty_name'],
+                'course_color': color,
+                'rgba_color': hex_to_rgba(color),
+            }
+            continue
+        
+        base_min = 7 * 60 + 30
+        start_index = (start_min - base_min) // 30
+        slots = max(1, (end_min - start_min) // 30)
+        start_index = max(0, min(start_index, len(time_slots) - 1))
+        
+        key = (day_idx, time_slots[start_index])
+        color = rs.get('course_color', '#FFA726')
+        schedule_map[key] = {
+            'rowspan': slots,
+            'course_code': rs['course_code'],
+            'section_name': rs['section_name'],
+            'faculty_name': rs['faculty_name'],
+            'course_color': color,
+            'rgba_color': hex_to_rgba(color),
+        }
+        
+        for j in range(1, slots):
+            idx = start_index + j
+            if 0 <= idx < len(time_slots):
+                time_slot_key = time_slots[idx]
+                if (day_idx, time_slot_key) not in schedule_map:
+                    covered.add((day_idx, time_slot_key))
+    
+    time_covered = set()
+    time_rowspan_map = {}
+    for idx, t in enumerate(time_slots):
+        if t in time_covered:
+            continue
+        max_slots = 1
+        for d in range(6):
+            key = (d, t)
+            if key in schedule_map:
+                try:
+                    r = int(schedule_map[key].get('rowspan', 1))
+                except:
+                    r = 1
+                max_slots = max(max_slots, r)
+        if max_slots > 1:
+            for j in range(1, max_slots):
+                next_idx = idx + j
+                if 0 <= next_idx < len(time_slots):
+                    time_covered.add(time_slots[next_idx])
+        time_rowspan_map[t] = max_slots
+    
+    table_rows = []
+    for t in time_slots:
+        cells = []
+        for d in range(6):
+            if (d, t) in covered:
+                cells.append('skip')
+            elif (d, t) in schedule_map:
+                cells.append(schedule_map[(d, t)])
+            else:
+                cells.append(None)
+        table_rows.append({'time': t, 'time_label': _format_time_label(t), 'cells': cells})
+    
+    unique_course_ids = room.schedules.values_list('course', flat=True).distinct()
+    totals = Course.objects.filter(id__in=unique_course_ids).aggregate(
+        total_lec=Sum('lecture_hours'),
+        total_lab=Sum('laboratory_hours'),
+        total_units=Sum('credit_units')
+    )
+    
+    return {
+        'room': room,
+        'table_rows': table_rows,
+        'total_lec': totals.get('total_lec') or 0,
+        'total_lab': totals.get('total_lab') or 0,
+        'total_units': totals.get('total_units') or 0,
+    }
+
+def _build_section_schedule_context(section):
+    """Helper function to build schedule context for a section"""
+    def hex_to_rgba(hex_color, alpha=0.15):
+        hex_color = hex_color.lstrip('#')
+        try:
+            r = int(hex_color[0:2], 16)
+            g = int(hex_color[2:4], 16)
+            b = int(hex_color[4:6], 16)
+            return f'rgba({r}, {g}, {b}, {alpha})'
+        except:
+            return 'rgba(255, 167, 38, 0.15)'
+    
+    schedules = Schedule.objects.filter(section=section).select_related('course', 'room', 'faculty').order_by('day', 'start_time')
+    
+    raw_schedules = []
+    for schedule in schedules:
+        raw_schedules.append({
+            'day': schedule.day,
+            'start_time': schedule.start_time,
+            'end_time': schedule.end_time,
+            'course_code': schedule.course.course_code,
+            'room': schedule.room.name if schedule.room else 'TBA',
+            'course_color': schedule.course.color,
+        })
+    
+    time_slots = ['07:30']
+    for hour in range(8, 22):
+        time_slots.append(f"{hour:02d}:00")
+        if hour < 21:
+            time_slots.append(f"{hour:02d}:30")
+    time_slots.append('21:30')
+    
+    days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+    
+    def _format_time_label(time_str):
+        try:
+            hours, minutes = map(int, str(time_str).split(':'))
+            suffix = 'AM' if hours < 12 else 'PM'
+            hour_12 = hours % 12 or 12
+            return f"{hour_12}:{minutes:02d} {suffix}"
+        except:
+            return str(time_str)
+    
+    def _normalize_time(val):
+        if val is None:
+            return None
+        if isinstance(val, str):
+            try:
+                parts = val.split(':')
+                h = int(parts[0])
+                m = int(parts[1]) if len(parts) > 1 else 0
+                return f"{h:02d}:{m:02d}"
+            except:
+                return val
+        try:
+            return val.strftime('%H:%M')
+        except:
+            return str(val)
+    
+    def _to_minutes(tval):
+        if tval is None:
+            return None
+        if isinstance(tval, str):
+            try:
+                parts = tval.split(':')
+                h = int(parts[0])
+                m = int(parts[1]) if len(parts) > 1 else 0
+                return h * 60 + m
+            except:
+                try:
+                    hhmm = tval.strip().split('.')[0]
+                    h, m = map(int, hhmm.split(':')[:2])
+                    return h * 60 + m
+                except:
+                    return None
+        try:
+            return tval.hour * 60 + tval.minute
+        except:
+            try:
+                s = str(tval)
+                h, m = map(int, s.split(':')[:2])
+                return h * 60 + m
+            except:
+                return None
+    
+    schedule_map = {}
+    covered = set()
+    
+    for rs in raw_schedules:
+        day_idx = rs['day']
+        start = _normalize_time(rs['start_time'])
+        end = _normalize_time(rs['end_time'])
+        if not start or not end:
+            key = (day_idx, start)
+            color = rs.get('course_color', '#FFA726')
+            schedule_map[key] = {
+                'rowspan': 1,
+                'course_code': rs['course_code'],
+                'room': rs['room'],
+                'course_color': color,
+                'rgba_color': hex_to_rgba(color),
+            }
+            continue
+        
+        start_min = _to_minutes(start)
+        end_min = _to_minutes(end)
+        try:
+            last_slot_min = 21 * 60 + 30
+            if end_min is not None and end_min > last_slot_min:
+                end_min = last_slot_min
+        except:
+            pass
+        
+        if start_min is None or end_min is None:
+            key = (day_idx, start)
+            color = rs.get('course_color', '#FFA726')
+            schedule_map[key] = {
+                'rowspan': 1,
+                'course_code': rs['course_code'],
+                'room': rs['room'],
+                'course_color': color,
+                'rgba_color': hex_to_rgba(color),
+            }
+            continue
+        
+        base_min = 7 * 60 + 30
+        start_index = (start_min - base_min) // 30
+        slots = (end_min - start_min) // 30
+        if slots < 1:
+            slots = 1
+        
+        start_index = max(0, start_index)
+        if start_index >= len(time_slots):
+            start_index = len(time_slots) - 1
+        
+        key = (day_idx, time_slots[start_index])
+        color = rs.get('course_color', '#FFA726')
+        schedule_map[key] = {
+            'rowspan': slots,
+            'course_code': rs['course_code'],
+            'room': rs['room'],
+            'course_color': color,
+            'rgba_color': hex_to_rgba(color),
+        }
+        
+        for j in range(1, slots):
+            idx = start_index + j
+            if 0 <= idx < len(time_slots):
+                time_slot_key = time_slots[idx]
+                if (day_idx, time_slot_key) not in schedule_map:
+                    covered.add((day_idx, time_slot_key))
+    
+    time_covered = set()
+    time_rowspan_map = {}
+    for idx, t in enumerate(time_slots):
+        if t in time_covered:
+            continue
+        max_slots = 1
+        for d in range(6):
+            key = (d, t)
+            if key in schedule_map:
+                try:
+                    r = int(schedule_map[key].get('rowspan', 1))
+                except:
+                    r = 1
+                if r > max_slots:
+                    max_slots = r
+        if max_slots > 1:
+            for j in range(1, max_slots):
+                next_idx = idx + j
+                if 0 <= next_idx < len(time_slots):
+                    time_covered.add(time_slots[next_idx])
+        time_rowspan_map[t] = max_slots
+    
+    table_rows = []
+    for t in time_slots:
+        cells = []
+        for d in range(6):
+            if (d, t) in covered:
+                cells.append('skip')
+            elif (d, t) in schedule_map:
+                cells.append(schedule_map[(d, t)])
+            else:
+                cells.append(None)
+        table_rows.append({'time': t, 'time_label': _format_time_label(t), 'cells': cells})
+    
+    unique_course_ids = section.schedules.values_list('course', flat=True).distinct()
+    totals = Course.objects.filter(id__in=unique_course_ids).aggregate(
+        total_lec=Sum('lecture_hours'),
+        total_lab=Sum('laboratory_hours'),
+        total_units=Sum('credit_units')
+    )
+    
+    return {
+        'section': section,
+        'table_rows': table_rows,
+        'total_lec': totals.get('total_lec') or 0,
+        'total_lab': totals.get('total_lab') or 0,
+        'total_units': totals.get('total_units') or 0,
+    }
+
+def _build_schedule_context(faculty):
+    """Helper function to build schedule context for rendering"""
+    schedules = Schedule.objects.filter(faculty=faculty).select_related(
+        'course', 'section', 'room'
+    ).order_by('day', 'start_time')
+    
+    raw_schedules = []
+    for schedule in schedules:
+        raw_schedules.append({
+            'day': schedule.day,
+            'start_time': schedule.start_time,
+            'end_time': schedule.end_time,
+            'course_code': schedule.course.course_code,
+            'room': schedule.room.name if schedule.room else 'TBA',
+            'section_name': schedule.section.name,
+            'course_color': schedule.course.color,
+        })
+    
+    # Time slots
+    time_slots = []
+    time_slots.append("07:30")
+    for hour in range(8, 22):
+        for minute in ['00', '30']:
+            if hour == 21 and minute == '30':
+                break
+            time_slots.append(f"{hour:02d}:{minute}")
+    time_slots.append("21:30")
+    
+    # Helper function to format time labels
+    def _format_time_label(time_str):
+        """Convert 24-hour time to 12-hour format with AM/PM"""
+        try:
+            h, m = map(int, time_str.split(':'))
+            if h >= 12:
+                return f"{h-12 if h > 12 else 12}:{m:02d} PM"
+            else:
+                return f"{h}:{m:02d} AM"
+        except:
+            return time_str
+    
+    # Helper function for colors
+    def hex_to_rgba(hex_color, alpha=0.15):
+        hex_color = hex_color.lstrip('#')
+        try:
+            r = int(hex_color[0:2], 16)
+            g = int(hex_color[2:4], 16)
+            b = int(hex_color[4:6], 16)
+            return f'rgba({r}, {g}, {b}, {alpha})'
+        except:
+            return 'rgba(255, 167, 38, 0.15)'
+    
+    # Build schedule map
+    schedule_map = {}
+    covered = set()
+    
+    for rs in raw_schedules:
+        day_idx = int(rs['day'])  # Database stores 0=Monday, 1=Tuesday, ..., 5=Saturday
+        
+        # Handle time objects (Django TimeField returns datetime.time objects)
+        start_time = rs['start_time']
+        end_time = rs['end_time']
+        
+        # Convert time objects to minutes since midnight
+        if hasattr(start_time, 'hour'):
+            start_min = start_time.hour * 60 + start_time.minute
+            end_min = end_time.hour * 60 + end_time.minute
+        else:
+            # If it's a string, parse it
+            start_parts = str(start_time).split(':')
+            end_parts = str(end_time).split(':')
+            start_min = int(start_parts[0]) * 60 + int(start_parts[1])
+            end_min = int(end_parts[0]) * 60 + int(end_parts[1])
+        
+        base_min = 7 * 60 + 30
+        start_index = (start_min - base_min) // 30
+        slots = (end_min - start_min) // 30
+        if slots < 1:
+            slots = 1
+        
+        start_index = max(0, start_index)
+        if start_index >= len(time_slots):
+            start_index = len(time_slots) - 1
+        
+        key = (day_idx, time_slots[start_index])
+        color = rs.get('course_color', '#FFA726')
+        schedule_map[key] = {
+            'rowspan': slots,
+            'course_code': rs['course_code'],
+            'room': rs['room'],
+            'section_name': rs['section_name'],
+            'course_color': color,
+            'rgba_color': hex_to_rgba(color),
+        }
+        
+        for j in range(1, slots):
+            idx = start_index + j
+            if 0 <= idx < len(time_slots):
+                time_slot_key = time_slots[idx]
+                if (day_idx, time_slot_key) not in schedule_map:
+                    covered.add((day_idx, time_slot_key))
+    
+    # Build table rows
+    table_rows = []
+    time_covered = set()
+    time_rowspan_map = {}
+    
+    for idx, t in enumerate(time_slots):
+        if t in time_covered:
+            continue
+        max_slots = 1
+        for d in range(6):
+            key = (d, t)
+            if key in schedule_map:
+                try:
+                    r = int(schedule_map[key].get('rowspan', 1))
+                except:
+                    r = 1
+                if r > max_slots:
+                    max_slots = r
+        if max_slots > 1:
+            for j in range(1, max_slots):
+                next_idx = idx + j
+                if 0 <= next_idx < len(time_slots):
+                    time_covered.add(time_slots[next_idx])
+        time_rowspan_map[t] = max_slots
+    
+    for t in time_slots:
+        cells = []
+        for d in range(6):
+            if (d, t) in covered:
+                cells.append('skip')
+            elif (d, t) in schedule_map:
+                cells.append(schedule_map[(d, t)])
+            else:
+                cells.append(None)
+        time_cell = None
+        if t not in time_covered:
+            time_cell = {
+                'text': t,
+                'rowspan': time_rowspan_map.get(t, 1)
+            }
+        table_rows.append({
+            'time': t, 
+            'time_label': _format_time_label(t),
+            'cells': cells, 
+            'time_cell': time_cell
+        })
+    
+    # Get totals
+    unique_course_ids = faculty.schedules.values_list('course', flat=True).distinct()
+    totals = Course.objects.filter(id__in=unique_course_ids).aggregate(
+        total_lec=Sum('lecture_hours'),
+        total_lab=Sum('laboratory_hours'),
+        total_units=Sum('credit_units')
+    )
+    
+    return {
+        'faculty': faculty,
+        'table_rows': table_rows,
+        'total_lec': totals.get('total_lec') or 0,
+        'total_lab': totals.get('total_lab') or 0,
+        'total_units': totals.get('total_units') or 0,
+    }
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def staff_schedule_html(request):
+    """API endpoint: Returns staff schedule as HTML (for mobile WebView)"""
+    try:
+        faculty = Faculty.objects.get(user=request.user)
+    except Faculty.DoesNotExist:
+        return Response({'error': 'Faculty not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    context = _build_schedule_context(faculty)
+    html_content = render(request, 'hello/staff_schedule_print.html', context).content.decode('utf-8')
+    
+    # Return HTML directly with proper content type
+    return HttpResponse(html_content, content_type='text/html')
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def faculty_schedule_html(request):
+    """API endpoint: Returns faculty schedule as HTML (for admin view)"""
+    try:
+        faculty = Faculty.objects.get(user=request.user)
+    except Faculty.DoesNotExist:
+        return Response({'error': 'Faculty not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    context = _build_schedule_context(faculty)
+    html_content = render(request, 'hello/faculty_schedule_print.html', context).content.decode('utf-8')
+    
+    # Return HTML directly with proper content type
+    return HttpResponse(html_content, content_type='text/html')
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def staff_schedule_pdf(request):
+    """API endpoint: Returns staff schedule as PDF download"""
+    try:
+        faculty = Faculty.objects.get(user=request.user)
+    except Faculty.DoesNotExist:
+        return Response({'error': 'Faculty not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    context = _build_schedule_context(faculty)
+    html_content = render(request, 'hello/staff_schedule_print.html', context).content.decode('utf-8')
+    
+    # For now, return the HTML - Android app can use native PDF printing
+    # Or integrate with a PDF library like pdfkit
+    response = HttpResponse(html_content, content_type='text/html')
+    response['Content-Disposition'] = f'attachment; filename="Staff_Schedule_{faculty.first_name}_{faculty.last_name}.html"'
+    return response
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def faculty_schedule_pdf(request):
+    """API endpoint: Returns faculty schedule as PDF download"""
+    try:
+        faculty = Faculty.objects.get(user=request.user)
+    except Faculty.DoesNotExist:
+        return Response({'error': 'Faculty not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    context = _build_schedule_context(faculty)
+    html_content = render(request, 'hello/faculty_schedule_print.html', context).content.decode('utf-8')
+    
+    response = HttpResponse(html_content, content_type='text/html')
+    response['Content-Disposition'] = f'attachment; filename="Faculty_Schedule_{faculty.first_name}_{faculty.last_name}.html"'
+    return response
+
 # ===== SECTION VIEWS =====
 
 @login_required(login_url='admin_login')
@@ -3758,5 +4385,219 @@ def api_my_schedule(request):
             'specializations': [],
             'total_units': 0
         }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def api_section_schedule(request, section_id):
+    """API endpoint to get schedule data for a specific section (public)"""
+    try:
+        section = get_object_or_404(Section, id=section_id)
+        
+        # Get all schedules for this section
+        schedules = Schedule.objects.filter(section=section).select_related(
+            'course', 'faculty', 'room'
+        ).order_by('day', 'start_time')
+        
+        # Format schedule data
+        schedule_data = []
+        
+        for schedule in schedules:
+            schedule_item = {
+                'day': schedule.day,
+                'start_time': str(schedule.start_time),
+                'end_time': str(schedule.end_time),
+                'duration': schedule.duration,
+                'course_code': schedule.course.course_code,
+                'course_title': schedule.course.descriptive_title,
+                'course_color': schedule.course.color,
+                'room': schedule.room.name if schedule.room else 'TBA',
+                'faculty_name': f"{schedule.faculty.first_name} {schedule.faculty.last_name}" if schedule.faculty else 'TBA',
+            }
+            schedule_data.append(schedule_item)
+        
+        return Response({
+            'section_id': section.id,
+            'section_name': section.name,
+            'schedules': schedule_data
+        }, status=status.HTTP_200_OK)
+        
+    except Http404:
+        return Response({'error': 'Section not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def api_room_schedule(request, room_id):
+    """API endpoint to get schedule data for a specific room (public)"""
+    try:
+        room = get_object_or_404(Room, id=room_id)
+        
+        # Get all schedules for this room
+        schedules = Schedule.objects.filter(room=room).select_related(
+            'course', 'faculty', 'section'
+        ).order_by('day', 'start_time')
+        
+        # Format schedule data
+        schedule_data = []
+        
+        for schedule in schedules:
+            schedule_item = {
+                'day': schedule.day,
+                'start_time': str(schedule.start_time),
+                'end_time': str(schedule.end_time),
+                'duration': schedule.duration,
+                'course_code': schedule.course.course_code,
+                'course_title': schedule.course.descriptive_title,
+                'course_color': schedule.course.color,
+                'section_name': schedule.section.name,
+                'faculty_name': f"{schedule.faculty.first_name} {schedule.faculty.last_name}" if schedule.faculty else 'TBA',
+            }
+            schedule_data.append(schedule_item)
+        
+        return Response({
+            'room_id': room.id,
+            'room_name': room.name,
+            'schedules': schedule_data
+        }, status=status.HTTP_200_OK)
+        
+    except Http404:
+        return Response({'error': 'Room not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def api_faculty_schedule_html(request, faculty_id):
+    """API endpoint: Returns faculty schedule as HTML by faculty ID (public)"""
+    try:
+        faculty = get_object_or_404(Faculty, id=faculty_id)
+        context = _build_schedule_context(faculty)
+        html_content = render(request, 'hello/faculty_schedule_print.html', context).content.decode('utf-8')
+        return HttpResponse(html_content, content_type='text/html')
+    except Http404:
+        return Response({'error': 'Faculty not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def api_faculty_schedule_pdf(request, faculty_id):
+    """API endpoint: Returns faculty schedule as PDF by faculty ID (public)"""
+    try:
+        faculty = get_object_or_404(Faculty, id=faculty_id)
+        context = _build_schedule_context(faculty)
+        
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+        from io import BytesIO
+        
+        pdf_buffer = BytesIO()
+        c = canvas.Canvas(pdf_buffer, pagesize=letter)
+        c.setTitle(f'Faculty Schedule - {faculty.first_name} {faculty.last_name}')
+        
+        # Simple text rendering - in production, use more sophisticated PDF generation
+        c.drawString(100, 750, f'Faculty: {faculty.first_name} {faculty.last_name}')
+        c.save()
+        
+        pdf_buffer.seek(0)
+        response = HttpResponse(pdf_buffer, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="faculty_schedule_{faculty_id}.pdf"'
+        return response
+    except Http404:
+        return Response({'error': 'Faculty not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def api_section_schedule_html(request, section_id):
+    """API endpoint: Returns section schedule as HTML by section ID (public)"""
+    try:
+        section = get_object_or_404(Section, id=section_id)
+        context = _build_section_schedule_context(section)
+        html_content = render(request, 'hello/section_schedule_print.html', context).content.decode('utf-8')
+        return HttpResponse(html_content, content_type='text/html')
+    except Http404:
+        return Response({'error': 'Section not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def api_section_schedule_pdf(request, section_id):
+    """API endpoint: Returns section schedule as PDF by section ID (public)"""
+    try:
+        section = get_object_or_404(Section, id=section_id)
+        context = _build_section_schedule_context(section)
+        
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+        from io import BytesIO
+        
+        pdf_buffer = BytesIO()
+        c = canvas.Canvas(pdf_buffer, pagesize=letter)
+        c.setTitle(f'Section Schedule - {section.name}')
+        
+        c.drawString(100, 750, f'Section: {section.name}')
+        c.save()
+        
+        pdf_buffer.seek(0)
+        response = HttpResponse(pdf_buffer, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="section_schedule_{section_id}.pdf"'
+        return response
+    except Http404:
+        return Response({'error': 'Section not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def api_room_schedule_html(request, room_id):
+    """API endpoint: Returns room schedule as HTML by room ID (public)"""
+    try:
+        room = get_object_or_404(Room, id=room_id)
+        context = _build_room_schedule_context(room)
+        html_content = render(request, 'hello/room_schedule_print.html', context).content.decode('utf-8')
+        return HttpResponse(html_content, content_type='text/html')
+    except Http404:
+        return Response({'error': 'Room not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def api_room_schedule_pdf(request, room_id):
+    """API endpoint: Returns room schedule as PDF by room ID (public)"""
+    try:
+        room = get_object_or_404(Room, id=room_id)
+        context = _build_room_schedule_context(room)
+        
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+        from io import BytesIO
+        
+        pdf_buffer = BytesIO()
+        c = canvas.Canvas(pdf_buffer, pagesize=letter)
+        c.setTitle(f'Room Schedule - {room.name}')
+        
+        c.drawString(100, 750, f'Room: {room.name}')
+        c.save()
+        
+        pdf_buffer.seek(0)
+        response = HttpResponse(pdf_buffer, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="room_schedule_{room_id}.pdf"'
+        return response
+    except Http404:
+        return Response({'error': 'Room not found'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
