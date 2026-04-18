@@ -4285,6 +4285,175 @@ def api_add_course(request):
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def api_user_profile_update(request):
+    """API endpoint to update user profile information via JSON payload"""
+    try:
+        data = request.data
+        user = request.user
+        
+        # Get faculty profile if it exists
+        try:
+            faculty = Faculty.objects.get(user=user)
+        except Faculty.DoesNotExist:
+            faculty = None
+        
+        errors = []
+        
+        # Only validate fields that are actually provided in the request
+        # Extract fields only if they're present in the request data
+        first_name = data.get('first_name', None)
+        last_name = data.get('last_name', None)
+        email = data.get('email', None)
+        gender = data.get('gender', None)
+        employment_status = data.get('employment_status', None)
+        highest_degree = data.get('highest_degree', None)
+        prc_licensed = data.get('prc_licensed', None)
+        specialization = data.get('specialization', None)  # List of course IDs
+        current_password = data.get('current_password', None)
+        new_password = data.get('new_password', None)
+        
+        # Validate first_name if provided
+        if first_name is not None:
+            first_name = first_name.strip() if isinstance(first_name, str) else first_name
+            if not first_name:
+                errors.append('First name cannot be empty')
+        
+        # Validate last_name if provided
+        if last_name is not None:
+            last_name = last_name.strip() if isinstance(last_name, str) else last_name
+            if not last_name:
+                errors.append('Last name cannot be empty')
+        
+        # Validate email if provided
+        if email is not None:
+            email = email.strip() if isinstance(email, str) else email
+            if not email:
+                errors.append('Email cannot be empty')
+            elif '@' not in email:
+                errors.append('Invalid email format')
+            else:
+                # Check email uniqueness
+                email_exists = User.objects.filter(email=email).exclude(id=user.id).exists()
+                if not email_exists and faculty:
+                    email_exists = Faculty.objects.filter(email=email).exclude(id=faculty.id).exists()
+                if email_exists:
+                    errors.append('This email is already in use')
+        
+        # Validate gender if provided (only for faculty)
+        if gender is not None:
+            gender = gender.strip() if isinstance(gender, str) else gender
+            if gender and gender not in ['M', 'F']:
+                errors.append('Invalid gender selection')
+        
+        # Validate employment_status if provided (only for faculty)
+        if employment_status is not None:
+            employment_status = employment_status.strip() if isinstance(employment_status, str) else employment_status
+            valid_statuses = ['full_time', 'part_time', 'contractual']
+            if employment_status and employment_status not in valid_statuses:
+                errors.append('Invalid employment status. Must be: full_time, part_time, or contractual')
+        
+        # Validate highest_degree if provided (only for faculty)
+        if highest_degree is not None:
+            highest_degree = highest_degree.strip() if isinstance(highest_degree, str) else highest_degree
+        
+        # Validate prc_licensed if provided (only for faculty)
+        if prc_licensed is not None:
+            if not isinstance(prc_licensed, bool):
+                if isinstance(prc_licensed, str):
+                    prc_licensed = prc_licensed.lower() in ['true', '1', 'yes']
+                else:
+                    prc_licensed = bool(prc_licensed)
+        
+        # Validate specialization if provided (only for faculty)
+        if specialization is not None:
+            if not isinstance(specialization, list):
+                errors.append('Specialization must be a list of course IDs')
+            else:
+                # Verify that all course IDs exist
+                for course_id in specialization:
+                    if not Course.objects.filter(id=course_id).exists():
+                        errors.append(f'Course with ID {course_id} does not exist')
+        
+        # Validate password change if attempted
+        if new_password is not None:
+            new_password = new_password.strip() if isinstance(new_password, str) else new_password
+            if new_password:  # Only validate if password is not empty
+                if not current_password:
+                    errors.append('Current password is required to set a new password')
+                elif not user.check_password(current_password):
+                    errors.append('Current password is incorrect')
+                else:
+                    # Validate new password strength
+                    if len(new_password) < 8:
+                        errors.append('New password must be at least 8 characters long')
+                    if not any(c.isupper() for c in new_password):
+                        errors.append('New password must contain at least one uppercase letter')
+                    allowed_specials = set('!@#$%^&*')
+                    if not any(c in allowed_specials for c in new_password):
+                        errors.append('New password must contain at least one special character (!@#$%^&*)')
+        
+        if errors:
+            return Response({
+                'success': False,
+                'errors': errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update user profile (only fields that were provided)
+        if first_name is not None:
+            user.first_name = first_name
+        if last_name is not None:
+            user.last_name = last_name
+        if email is not None:
+            user.email = email
+        
+        # Update password if provided
+        if new_password is not None and new_password:
+            user.set_password(new_password)
+        
+        user.save()
+        
+        # Update faculty profile if it exists
+        if faculty:
+            if first_name is not None:
+                faculty.first_name = first_name
+            if last_name is not None:
+                faculty.last_name = last_name
+            if email is not None:
+                faculty.email = email
+            if gender is not None:
+                faculty.gender = gender
+            if employment_status is not None:
+                faculty.employment_status = employment_status
+            if highest_degree is not None:
+                faculty.highest_degree = highest_degree
+            if prc_licensed is not None:
+                faculty.prc_licensed = prc_licensed
+            
+            faculty.save()
+            
+            # Update specialization if provided (clear and re-add)
+            if specialization is not None:
+                faculty.specialization.clear()
+                for course_id in specialization:
+                    faculty.specialization.add(course_id)
+        
+        # Update session auth hash if password was changed
+        if new_password is not None and new_password:
+            update_session_auth_hash(request, user)
+        
+        return Response({
+            'success': True,
+            'message': 'Profile updated successfully'
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_faculty_schedule(request, faculty_id):
@@ -4331,6 +4500,7 @@ def api_faculty_schedule(request, faculty_id):
     except Http404:
         return Response({'error': 'Faculty not found'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
