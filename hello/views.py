@@ -24,10 +24,67 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 # Helper function to check if user is admin
 def is_admin(user):
     return user.is_staff and user.is_superuser
+
+
+# Custom JWT Serializer with user data
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def get_token(self, user):
+        token = super().get_token(user)
+        return token
+    
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        
+        # Add custom claims
+        token['email'] = user.email
+        token['username'] = user.username
+        token['first_name'] = user.first_name
+        token['last_name'] = user.last_name
+        
+        return token
+    
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        
+        # Add user information to response
+        user = self.user
+        try:
+            faculty = Faculty.objects.get(user=user)
+            data['user_id'] = user.id
+            data['email'] = user.email
+            data['username'] = user.username
+            data['first_name'] = user.first_name
+            data['last_name'] = user.last_name
+            data['is_staff'] = user.is_staff
+            data['is_superuser'] = user.is_superuser
+            data['faculty_id'] = faculty.id
+            data['gender'] = faculty.gender
+            data['employment_status'] = faculty.employment_status
+            data['highest_degree'] = faculty.highest_degree
+            data['prc_licensed'] = faculty.prc_licensed
+        except Faculty.DoesNotExist:
+            # User exists but has no faculty profile (admin user)
+            data['user_id'] = user.id
+            data['email'] = user.email
+            data['username'] = user.username
+            data['first_name'] = user.first_name
+            data['last_name'] = user.last_name
+            data['is_staff'] = user.is_staff
+            data['is_superuser'] = user.is_superuser
+            data['faculty_id'] = None
+        
+        return data
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
 
 
 def send_email_via_brevo_api(subject, message, from_email, recipients):
@@ -610,7 +667,10 @@ def edit_faculty(request, faculty_id):
             faculty.email = email
             faculty.gender = request.POST.get('gender')
             faculty.employment_status = request.POST.get('employment_status')
-            faculty.highest_degree = request.POST.get('highest_degree', '')
+            # Only update highest_degree if a valid value is provided
+            highest_degree = request.POST.get('highest_degree', '').strip()
+            if highest_degree:
+                faculty.highest_degree = highest_degree
             faculty.prc_licensed = request.POST.get('prc_licensed') == 'on'
             
             # Update specializations
@@ -3836,36 +3896,53 @@ def save_account_settings(request):
         }, status=500)
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def get_user_faculty_data(request):
-    """API endpoint to fetch current user's faculty data for the Android App"""
+def _get_faculty_response_data(request):
+    """Helper function to build faculty data response for mobile app"""
     try:
         faculty = Faculty.objects.get(user=request.user)
         
-        # Build full URL so the app can find the image (http://10.0.2.2:8000/media/...)
         profile_pic_url = None
         if faculty.profile_picture:
             profile_pic_url = request.build_absolute_uri(faculty.profile_picture.url)
+        
+        # FIX: Return a list of descriptive titles (Strings) to match FacultyData model
+        specializations = [course.descriptive_title for course in faculty.specialization.all()]
 
-        return Response({
+        return {
+            'id': faculty.id,  # Include ID for matching logic
             'first_name': faculty.first_name,
             'last_name': faculty.last_name,
             'email': faculty.email,
             'gender': faculty.gender or '',
+            'employment_status': faculty.employment_status or 'full_time',
+            'highest_degree': faculty.highest_degree or '',
+            'prc_licensed': 'Yes' if faculty.prc_licensed else 'No',
+            'specialization': specializations,
             'profile_picture_url': profile_pic_url,
             'total_units': faculty.total_units,
-        }, status=status.HTTP_200_OK)
+        }
 
     except Faculty.DoesNotExist:
-        return Response({
+        return {
+            'id': 0,
             'first_name': request.user.first_name,
             'last_name': request.user.last_name,
             'email': request.user.email,
             'gender': '',
+            'employment_status': 'full_time',
+            'highest_degree': '',
+            'prc_licensed': 'No',
+            'specialization': [],
             'profile_picture_url': None,
             'total_units': 0,
-        }, status=status.HTTP_200_OK)
+        }
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_user_faculty_data(request):
+    """API endpoint to fetch current user's faculty data for the Android App"""
+    data = _get_faculty_response_data(request)
+    return Response(data, status=status.HTTP_200_OK)
 
 def api_password_reset(request):
     """API endpoint to send password reset email"""
@@ -3987,7 +4064,7 @@ def api_password_reset_confirm(request):
     return JsonResponse({'error': 'Method not allowed'}, status=405)
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def get_available_resources(request):
     """API endpoint to get available faculty and rooms for a given time slot"""
     try:
@@ -4035,7 +4112,7 @@ def get_available_resources(request):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def get_dashboard_stats(request):
     data = {
         "faculty_count": Faculty.objects.count(),
@@ -4044,14 +4121,14 @@ def get_dashboard_stats(request):
     return Response(data)
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def get_curriculums(request):
     curriculums = Curriculum.objects.all().order_by('-year')
     data = [{"id": c.id, "name": c.name, "year": c.year} for c in curriculums]
     return Response(data)
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def get_sections(request):
     sections = Section.objects.all()
     data = [{
@@ -4065,7 +4142,7 @@ def get_sections(request):
     return Response(data)
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def get_rooms(request):
     rooms = Room.objects.all().order_by('campus', 'room_number')
     data = [{
@@ -4079,7 +4156,7 @@ def get_rooms(request):
     return Response(data)
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def get_faculty_list(request):
     faculty = Faculty.objects.all().order_by('last_name', 'first_name')
     data = []
@@ -4105,9 +4182,16 @@ def get_faculty_list(request):
     return Response(data)
 
 @api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def get_courses(request):
     if request.method == 'POST':
+        # POST requires authentication
+        if not request.user or not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required to create courses'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
         # Handle course creation
         try:
             # Get the data sent from the mobile app
@@ -4443,10 +4527,10 @@ def api_user_profile_update(request):
         if new_password is not None and new_password:
             update_session_auth_hash(request, user)
         
-        return Response({
-            'success': True,
-            'message': 'Profile updated successfully'
-        }, status=status.HTTP_200_OK)
+        # FIX: Return the updated faculty data object instead of just success message
+        # This prevents the Android app from failing to parse the response
+        data = _get_faculty_response_data(request)
+        return Response(data, status=status.HTTP_200_OK)
         
     except Exception as e:
         return Response({

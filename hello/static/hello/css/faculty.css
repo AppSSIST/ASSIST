@@ -1080,6 +1080,15 @@ body {
     height: 16px;
     accent-color: #4f46e5;
     margin: 0;
+    transition: all 0.2s ease-in-out;
+}
+
+.multiselect-option input[type="checkbox"]:hover {
+    transform: scale(1.12);
+}
+
+.multiselect-option input[type="checkbox"]:checked {
+    animation: checkAnimation 0.3s ease-in-out;
 }
 
 .multiselect-option span {
@@ -1184,6 +1193,29 @@ body {
     height: 18px;
     cursor: pointer;
     accent-color: #212529;
+    transition: all 0.2s ease-in-out;
+}
+
+.checkbox-label input[type="checkbox"]:hover,
+.checkbox-label input[type="radio"]:hover {
+    transform: scale(1.15);
+}
+
+.checkbox-label input[type="checkbox"]:checked,
+.checkbox-label input[type="radio"]:checked {
+    animation: checkAnimation 0.3s ease-in-out;
+}
+
+@keyframes checkAnimation {
+    0% {
+        transform: scale(0.8);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+    100% {
+        transform: scale(1);
+    }
 }
 
 /* Specialization Select */
