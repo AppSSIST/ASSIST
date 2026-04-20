@@ -3630,12 +3630,11 @@ def save_account_settings(request):
         errors.append('First name is required')
     if not last_name:
         errors.append('Last name is required')
-    if not email:
-        errors.append('Email is required')
+    # Email is now read-only, so we don't require it in the form
     if gender and gender not in ['M', 'F']:
         errors.append('Invalid gender selection')
     
-    # Validate email format and uniqueness
+    # Validate email format and uniqueness only if email is provided
     if email:
         # Check if email is unique (excluding current user's email)
         email_exists = User.objects.filter(email=email).exclude(id=request.user.id).exists()
@@ -3716,10 +3715,11 @@ def save_account_settings(request):
             
             faculty.save()
         
-        # Always update user profile
+        # Always update user profile (only update email if provided)
         request.user.first_name = first_name
         request.user.last_name = last_name
-        request.user.email = email
+        if email:
+            request.user.email = email
         
         # Update password if provided
         if new_password:

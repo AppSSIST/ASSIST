@@ -42,7 +42,7 @@
                 </div>
                 <div class="form-group">
                     <label>Email</label>
-                    <input type="email" id="email" name="email" value="{{ user.email|default:'' }}">
+                    <input type="email" id="email" name="email" value="{{ user.email|default:'' }}" readonly>
                 </div>
             </div>
             <div class="form-row">
@@ -258,13 +258,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const form = document.querySelector('.account-form');
             const firstName = document.getElementById('firstName') ? document.getElementById('firstName').value.trim() : '';
             const lastName = document.getElementById('lastName') ? document.getElementById('lastName').value.trim() : '';
-            const email = document.getElementById('email') ? document.getElementById('email').value.trim() : '';
             const gender = document.getElementById('gender') ? document.getElementById('gender').value : '';
             const currentPassword = document.getElementById('currentPassword') ? document.getElementById('currentPassword').value : '';
             const newPassword = document.getElementById('newPassword') ? document.getElementById('newPassword').value : '';
 
-            // Simple validation
-            if (!firstName || !lastName || !email) {
+            // Simple validation (email is now read-only, so don't require it)
+            if (!firstName || !lastName) {
                 alert('Please fill in all required fields');
                 return;
             }
@@ -285,7 +284,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const formData = new FormData();
             formData.append('firstName', firstName);
             formData.append('lastName', lastName);
-            formData.append('email', email);
             formData.append('gender', gender);
             formData.append('currentPassword', currentPassword);
             formData.append('newPassword', newPassword);
