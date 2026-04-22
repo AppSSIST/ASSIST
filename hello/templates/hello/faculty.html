@@ -14,7 +14,7 @@
         <div class="page-title">Faculty</div>
     <div class="account-section" onclick="toggleDropdown(event)">
             <div class="account-avatar"></div>
-            <span class="account-name">ADMIN</span>
+            <span class="account-name">{{ user.first_name|default:user.username|title }}</span>
             <svg class="dropdown-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                 <path d="M7 10l5 5 5-5z"/>
             </svg>
@@ -303,7 +303,7 @@
                     </div>
                     <div class="form-group">
                         <label>Highest Degree Earned</label>
-                        <select name="highest_degree" id="add_highest_degree" required>
+                        <select name="highest_degree" required>
                             <option value="">Select degree</option>
                             <option value="Master's Degree">Master's Degree</option>
                             <option value="Doctoral's Degree">Doctoral's Degree</option>
@@ -316,7 +316,7 @@
                     <label class="checkbox-group-label">PRC Licensed:</label>
                     <div class="checkbox-group">
                         <label class="checkbox-label">
-                            <input type="checkbox" name="prc_licensed" id="add_prc_qualified" value="on" onchange="togglePRCQualified('add')">
+                            <input type="checkbox" name="prc_licensed" id="add_prc_qualified">
                             <span>Qualified</span>
                         </label>
                         <label class="checkbox-label">
@@ -433,7 +433,7 @@
                     <label class="checkbox-group-label">PRC Licensed:</label>
                     <div class="checkbox-group">
                         <label class="checkbox-label">
-                            <input type="checkbox" name="prc_licensed" id="edit_prc_qualified" value="on" onchange="togglePRCQualified('edit')">
+                            <input type="checkbox" name="prc_licensed" id="edit_prc_qualified">
                             <span>Qualified</span>
                         </label>
                         <label class="checkbox-label">
@@ -687,9 +687,6 @@
                 menu.classList.remove('show');
             });
             
-            // Reset the form first
-            document.getElementById('editFacultyForm').reset();
-            
             fetch(`/admin/faculty/edit/${facultyId}/`)
                 .then(response => response.json())
                 .then(data => {
@@ -699,8 +696,7 @@
                     document.getElementById('edit_email').value = data.email;
                     document.getElementById('edit_gender').value = data.gender;
                     document.getElementById('edit_employment_status').value = data.employment_status;
-                    // Ensure highest_degree is set to a valid value, default to empty if not provided
-                    document.getElementById('edit_highest_degree').value = data.highest_degree || '';
+                    document.getElementById('edit_highest_degree').value = data.highest_degree;
                     document.getElementById('edit_prc_qualified').checked = data.prc_licensed;
                     document.getElementById('edit_prc_not_applicable').checked = !data.prc_licensed;
                     
@@ -730,18 +726,9 @@
         function submitAddFaculty(event) {
             event.preventDefault();
             const formData = new FormData(event.target);
-            
-            // Validate email
             const emailValue = (formData.get('email') || '').toString().trim().toLowerCase();
             if (!emailValue.endsWith('@tip.edu.ph')) {
                 showNotification('Only @tip.edu.ph email addresses can be used to create an account.', 'error');
-                return;
-            }
-            
-            // Validate highest_degree is not empty
-            const highestDegree = (formData.get('highest_degree') || '').toString().trim();
-            if (!highestDegree || highestDegree === '') {
-                showNotification('Please select a Highest Degree Earned', 'error');
                 return;
             }
             
@@ -784,14 +771,6 @@
 
         function submitEditFaculty(event) {
             event.preventDefault();
-            
-            // Validate highest_degree is not empty
-            const highestDegree = document.getElementById('edit_highest_degree').value;
-            if (!highestDegree || highestDegree === '') {
-                showNotification('Please select a Highest Degree Earned', 'error');
-                return;
-            }
-            
             const formData = new FormData(event.target);
             const facultyId = document.getElementById('edit_faculty_id').value;
             
@@ -883,20 +862,11 @@
             const qualifiedCheckbox = document.getElementById(`${mode}_prc_qualified`);
             const naCheckbox = document.getElementById(`${mode}_prc_not_applicable`);
             
-            // Get which one triggered the change
-            const clickedElement = event?.target;
-            
-            // True radio-button behavior: clicking one always unchecks the other
-            if (clickedElement === qualifiedCheckbox) {
-                // Qualified was clicked
-                if (qualifiedCheckbox.checked) {
-                    naCheckbox.checked = false;
-                }
-            } else if (clickedElement === naCheckbox) {
-                // N/A was clicked
-                if (naCheckbox.checked) {
-                    qualifiedCheckbox.checked = false;
-                }
+            if (naCheckbox.checked) {
+                qualifiedCheckbox.checked = false;
+                qualifiedCheckbox.disabled = true;
+            } else {
+                qualifiedCheckbox.disabled = false;
             }
         }
 

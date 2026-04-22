@@ -15,7 +15,7 @@
         <div class="page-title">COURSE MANAGEMENT</div>
     <div class="account-section" onclick="toggleDropdown(event)">
             <div class="account-avatar"></div>
-            <span class="account-name">ADMIN</span>
+            <span class="account-name">{{ user.first_name|default:user.username|title }}</span>
             <svg class="dropdown-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                 <path d="M7 10l5 5 5-5z"/>
             </svg>
@@ -544,10 +544,13 @@
                     showNotification('Curriculum deleted successfully', 'success');
                     setTimeout(() => location.reload(), 1000);
                 } else {
-                    showNotification('Error deleting curriculum', 'error');
+                    const errorMsg = data.errors && data.errors.length > 0 
+                        ? data.errors.join(', ') 
+                        : 'Error deleting curriculum';
+                    showNotification(errorMsg, 'error');
                 }
             } catch (error) {
-                showNotification('Error deleting curriculum', 'error');
+                showNotification('Error deleting curriculum: ' + error.message, 'error');
             }
         }
 

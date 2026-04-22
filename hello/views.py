@@ -4127,9 +4127,40 @@ def get_curriculums(request):
     data = [{"id": c.id, "name": c.name, "year": c.year} for c in curriculums]
     return Response(data)
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
 def get_sections(request):
+    if request.method == 'POST':
+        # Handle adding new section
+        try:
+            data = request.data
+            
+            curriculum = Curriculum.objects.get(id=data.get('curriculum'))
+            
+            section = Section.objects.create(
+                name=data.get('name'),
+                year_level=int(data.get('year_level')),
+                semester=int(data.get('semester')),
+                curriculum=curriculum,
+                max_students=int(data.get('max_students', 40)),
+                status='incomplete'
+            )
+            
+            return Response({
+                "id": section.id,
+                "name": section.name,
+                "year_level": section.year_level,
+                "semester": section.semester,
+                "curriculum": section.curriculum.id,
+                "max_students": section.max_students
+            }, status=status.HTTP_201_CREATED)
+            
+        except Curriculum.DoesNotExist:
+            return Response({"error": "Curriculum not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # GET request - return list of sections
     sections = Section.objects.all()
     data = [{
         "id": s.id, 
@@ -4141,9 +4172,35 @@ def get_sections(request):
     } for s in sections]
     return Response(data)
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
 def get_rooms(request):
+    if request.method == 'POST':
+        # Handle adding new room
+        try:
+            data = request.data
+            
+            room = Room.objects.create(
+                name=data.get('name'),
+                room_number=data.get('room_number', ''),
+                capacity=int(data.get('capacity', 40)),
+                campus=data.get('campus', 'casal'),
+                room_type=data.get('room_type', 'lecture')
+            )
+            
+            return Response({
+                "id": room.id,
+                "name": room.name,
+                "room_number": room.room_number,
+                "capacity": room.capacity,
+                "campus": room.campus,
+                "room_type": room.room_type
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # GET request - return list of rooms
     rooms = Room.objects.all().order_by('campus', 'room_number')
     data = [{
         "id": r.id,
@@ -4155,9 +4212,68 @@ def get_rooms(request):
     } for r in rooms]
     return Response(data)
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
 def get_faculty_list(request):
+    if request.method == 'POST':
+        # Handle adding new faculty
+        try:
+            data = request.data
+            
+            # Generate username from email
+            email = data.get('email', '').strip().lower()
+            
+            # Check if email already exists
+            if Faculty.objects.filter(email__iexact=email).exists() or User.objects.filter(email__iexact=email).exists():
+                return Response({"error": "Email already registered"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check username availability
+            username = email
+            if User.objects.filter(username__iexact=username).exists():
+                return Response({"error": "Username already taken"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Generate temporary password
+            password = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
+            
+            # Create user
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password,
+                first_name=data.get('first_name', ''),
+                last_name=data.get('last_name', '')
+            )
+            
+            # Set staff permissions
+            user.is_staff = True
+            user.is_superuser = False
+            user.save()
+            
+            # Create faculty record
+            faculty = Faculty.objects.create(
+                user=user,
+                first_name=data.get('first_name', ''),
+                last_name=data.get('last_name', ''),
+                email=email,
+                gender=data.get('gender', 'M'),
+                employment_status=data.get('employment_status', 'full_time'),
+                highest_degree=data.get('highest_degree', ''),
+                prc_licensed=data.get('prc_licensed', False),
+                department=data.get('department', '')
+            )
+            
+            return Response({
+                "id": faculty.id,
+                "first_name": faculty.first_name,
+                "last_name": faculty.last_name,
+                "email": faculty.email,
+                "employment_status": faculty.employment_status
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # GET request - return list of faculty
     faculty = Faculty.objects.all().order_by('last_name', 'first_name')
     data = []
     for f in faculty:
@@ -4366,6 +4482,125 @@ def api_add_course(request):
             "color": course.color
         }, status=status.HTTP_201_CREATED)
 
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def api_add_room(request):
+    """API endpoint to add a new room"""
+    try:
+        data = request.data
+        
+        room = Room.objects.create(
+            name=data.get('name'),
+            room_number=data.get('room_number', ''),
+            capacity=int(data.get('capacity', 40)),
+            campus=data.get('campus', 'casal'),
+            room_type=data.get('room_type', 'lecture')
+        )
+        
+        return Response({
+            "id": room.id,
+            "name": room.name,
+            "room_number": room.room_number,
+            "capacity": room.capacity,
+            "campus": room.campus,
+            "room_type": room.room_type
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def api_add_section(request):
+    """API endpoint to add a new section"""
+    try:
+        data = request.data
+        
+        curriculum = Curriculum.objects.get(id=data.get('curriculum'))
+        
+        section = Section.objects.create(
+            name=data.get('name'),
+            year_level=int(data.get('year_level')),
+            semester=int(data.get('semester')),
+            curriculum=curriculum,
+            max_students=int(data.get('max_students', 40)),
+            status='incomplete'
+        )
+        
+        return Response({
+            "id": section.id,
+            "name": section.name,
+            "year_level": section.year_level,
+            "semester": section.semester,
+            "curriculum": section.curriculum.id,
+            "max_students": section.max_students
+        }, status=status.HTTP_201_CREATED)
+        
+    except Curriculum.DoesNotExist:
+        return Response({"error": "Curriculum not found"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def api_add_faculty(request):
+    """API endpoint to add a new faculty member"""
+    try:
+        data = request.data
+        
+        # Generate username from email
+        email = data.get('email', '').strip().lower()
+        
+        # Check if email already exists
+        if Faculty.objects.filter(email__iexact=email).exists() or User.objects.filter(email__iexact=email).exists():
+            return Response({"error": "Email already registered"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check username availability
+        username = email
+        if User.objects.filter(username__iexact=username).exists():
+            return Response({"error": "Username already taken"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Generate temporary password
+        password = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
+        
+        # Create user
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password,
+            first_name=data.get('first_name', ''),
+            last_name=data.get('last_name', '')
+        )
+        
+        # Set staff permissions
+        user.is_staff = True
+        user.is_superuser = False
+        user.save()
+        
+        # Create faculty record
+        faculty = Faculty.objects.create(
+            user=user,
+            first_name=data.get('first_name', ''),
+            last_name=data.get('last_name', ''),
+            email=email,
+            gender=data.get('gender', 'M'),
+            employment_status=data.get('employment_status', 'full_time'),
+            highest_degree=data.get('highest_degree', ''),
+            prc_licensed=data.get('prc_licensed', False),
+            department=data.get('department', '')
+        )
+        
+        return Response({
+            "id": faculty.id,
+            "first_name": faculty.first_name,
+            "last_name": faculty.last_name,
+            "email": faculty.email,
+            "employment_status": faculty.employment_status
+        }, status=status.HTTP_201_CREATED)
+        
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 

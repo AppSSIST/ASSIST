@@ -29,21 +29,23 @@
         }
 
         @page {
-            size: letter;
+            size: portrait;
             margin: 0.25in;
         }
 
         .print-container {
             background: white;
-            width: 8in;
+            width: 100%;
+            max-width: 8.5in;
             min-height: auto;
-            margin: 20px auto;
+            margin: 0 auto;
             padding: 0.25in;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            box-shadow: none;
             box-sizing: border-box;
-            overflow: visible;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
+            page-break-after: avoid;
         }
 
         .header {
@@ -83,7 +85,7 @@
         .schedule-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 9px;
+            font-size: 10px;
             margin-bottom: 10px;
             page-break-inside: avoid;
         }
@@ -91,44 +93,44 @@
         .schedule-table th,
         .schedule-table td {
             border: 1px solid #000;
-            padding: 3px 2px;
+            padding: 6px 3px;
             text-align: center;
-            min-height: 18px;
-            font-size: 7px;
-            line-height: 1;
+            min-height: 20px;
+            font-size: 8px;
+            line-height: 1.1;
         }
 
         .schedule-table th {
             background-color: #f0f0f0;
             font-weight: bold;
-            font-size: 7px;
-            min-height: 22px;
-            padding: 6px 1px;
+            font-size: 8px;
+            min-height: 26px;
+            padding: 8px 2px;
         }
 
         .schedule-table .time-col {
-            width: 7%;
+            width: 8%;
             background-color: #f9f9f9;
             font-weight: bold;
-            font-size: 7px;
-            padding: 3px 1px;
-            min-height: 18px;
+            font-size: 8px;
+            padding: 4px 2px;
+            min-height: 20px;
         }
 
         .schedule-table .day-col {
-            width: 13%;
+            width: 15%;
         }
 
         .schedule-table .course-cell {
-            font-size: 7px;
+            font-size: 8px;
             vertical-align: top;
             position: relative;
-            padding: 3px 2px;
+            padding: 6px 4px;
             text-align: left;
-            line-height: 1;
+            line-height: 1.1;
             border-left: 1px solid;
             overflow: hidden;
-            min-height: 28px;
+            min-height: 30px;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
         }
@@ -206,11 +208,52 @@
             font-weight: bold;
         }
 
+        .colleges-section {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px 16px;
+            font-size: 9px;
+            margin: 0 auto 14px;
+            width: min(100%, 640px);
+            max-width: 640px;
+            justify-items: center;
+            align-items: center;
+            text-align: center;
+            padding: 0 10px;
+        }
+
+        .college-checkbox {
+            display: flex;
+            justify-content: center;
+            gap: 4px;
+            white-space: nowrap;
+            align-items: center;
+            width: 100%;
+        }
+
+        .checkbox {
+            width: 10px;
+            height: 10px;
+            border: 1px solid #000;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+
+        .checkbox.checked::before {
+            content: "✓";
+            font-weight: bold;
+            font-size: 8px;
+            display: block;
+            line-height: 10px;
+            text-align: center;
+        }
+
         .meta-line {
             border-bottom: 1px solid #000;
             padding: 0 8px;
             min-width: 120px;
             display: inline-block;
+            vertical-align: middle;
         }
 
         .units-section {
@@ -433,12 +476,39 @@
             <div class="header-ref">TIP-ACAD-004 | Revision Status/Date: 01/2025</div>
         </div>
 
+        <div class="colleges-section">
+            <div class="college-checkbox">
+                <div class="checkbox"></div>
+                <span>College of Arts</span>
+            </div>
+            <div class="college-checkbox">
+                <div class="checkbox"></div>
+                <span>College of Business Education</span>
+            </div>
+            <div class="college-checkbox">
+                <div class="checkbox"></div>
+                <span>College of Computer Studies</span>
+            </div>
+            <div class="college-checkbox">
+                <div class="checkbox"></div>
+                <span>College of Education</span>
+            </div>
+            <div class="college-checkbox">
+                <div class="checkbox"></div>
+                <span>College of Engineering and Architecture</span>
+            </div>
+            <div class="college-checkbox">
+                <div class="checkbox"></div>
+                <span>Graduate Programs</span>
+            </div>
+        </div>
+
         <div class="print-schedule-container">
             <div class="schedule-meta">
-                <strong>Faculty:</strong>
-                <span class="meta-line">{{ faculty.first_name }} {{ faculty.last_name }}</span>
-                <strong>Department:</strong>
+                <strong>Program:</strong>
                 <span class="meta-line">{{ faculty.department|default:"" }}</span>
+                <strong>Semester, S.Y.:</strong>
+                <span class="meta-line"></span>
             </div>
             <table class="schedule-table">
                 <thead>

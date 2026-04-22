@@ -104,6 +104,11 @@ urlpatterns = [
     path('api/courses/<int:course_id>/', views.course_detail, name='course_detail'),
     path('api/courses/add/', views.api_add_course, name='api_add_course'),
     
+    # API endpoints for adding data
+    path('api/room/add/', views.api_add_room, name='api_add_room'),
+    path('api/section/add/', views.api_add_section, name='api_add_section'),
+    path('api/faculty/add/', views.api_add_faculty, name='api_add_faculty'),
+    
     # Mobile app schedule print API endpoints
     path('api/schedule/staff/html/', views.staff_schedule_html, name='api_staff_schedule_html'),
     path('api/schedule/staff/pdf/', views.staff_schedule_pdf, name='api_staff_schedule_pdf'),

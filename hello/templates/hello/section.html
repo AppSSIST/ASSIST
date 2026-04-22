@@ -14,7 +14,7 @@
         <div class="page-title">Section</div>
     <div class="account-section" onclick="toggleDropdown(event)">
             <div class="account-avatar"></div>
-            <span class="account-name">ADMIN</span>
+            <span class="account-name">{{ user.first_name|default:user.username|title }}</span>
             <svg class="dropdown-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                 <path d="M7 10l5 5 5-5z"/>
             </svg>
@@ -822,7 +822,7 @@
 
         function printSchedule() {
             if (currentSectionId) {
-                window.open(`/admin/section/${currentSectionId}/schedule/print?print=1`, '_blank');
+                window.open(`/admin/section/${currentSectionId}/schedule/print/`, '_blank');
             }
         }
 
