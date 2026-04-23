@@ -272,8 +272,20 @@
                         <input type="text" name="first_name" required>
                     </div>
                     <div class="form-group">
+                        <label>Middle Name</label>
+                        <input type="text" name="middle_name" placeholder="Optional">
+                    </div>
+                    <div class="form-group">
                         <label>Last Name</label>
                         <input type="text" name="last_name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Professional Title</label>
+                        <select name="professional_title">
+                            <option value="">-- Select Title --</option>
+                            <option value="Dr.">Dr. (Doctor)</option>
+                            <option value="Engr.">Engr. (Engineer)</option>
+                        </select>
                     </div>
                     <div class="form-group">
                         <label>Gender</label>
@@ -304,9 +316,10 @@
                     <div class="form-group">
                         <label>Highest Degree Earned</label>
                         <select name="highest_degree" required>
-                            <option value="">Select degree</option>
+                            <option value="">-- Select Degree --</option>
+                            <option value="Bachelor's Degree">Bachelor's Degree</option>
                             <option value="Master's Degree">Master's Degree</option>
-                            <option value="Doctoral's Degree">Doctoral's Degree</option>
+                            <option value="Doctoral Degree">Doctoral Degree</option>
                         </select>
                     </div>
                 </div>
@@ -326,30 +339,26 @@
                     </div>
                 </div>
 
-                <!-- Specialization with Custom Multiselect -->
+                <!-- Specialization Dropdown -->
                 <div class="form-group">
                     <label>Specialization</label>
-                    <div class="custom-multiselect" id="add_multiselect">
-                        <div class="multiselect-header" onclick="toggleMultiselect('add')">
-                            <div class="multiselect-selected">
-                                <span class="multiselect-placeholder">Select specializations...</span>
-                            </div>
-                            <div class="multiselect-arrow"></div>
-                        </div>
-                        <div class="multiselect-dropdown" id="add_dropdown">
-                            <div class="multiselect-search">
-                                <input type="text" placeholder="Search courses (e.g., CHEM, CPE)..." oninput="filterMultiselectOptions('add', this.value)">
-                            </div>
-                            <div class="multiselect-options" id="add_options">
-                                {% for course in courses %}
-                                <div class="multiselect-option" data-value="{{ course.id }}" data-text="{{ course.course_code }} - {{ course.descriptive_title }}" onclick="toggleOption('add', this)">
-                                    <input type="checkbox">
-                                    <span>{{ course.course_code }} - {{ course.descriptive_title }}</span>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        </div>
-                    </div>
+                    <select name="specialization" onchange="toggleCustomSpecialization('add', this.value)">
+                        <option value="">-- Select Specialization --</option>
+                        <option value="computer_networking">Computer Networking</option>
+                        <option value="digital_electronics">Digital Electronics</option>
+                        <option value="software_dev">Software Development</option>
+                        <option value="machine_learning">Machine Learning</option>
+                        <option value="cyber_security">Cyber Security</option>
+                        <option value="system_administration">System Administration</option>
+                        <option value="computer_architecture">Computer Architecture</option>
+                        <option value="embedded_systems">Embedded Systems</option>
+                        <option value="add_specialization">Add Specialization</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="add_custom_specialization" style="display: none;">
+                    <label>Enter Custom Specialization</label>
+                    <input type="text" id="add_custom_spec_input" placeholder="e.g., Data Analytics">
                 </div>
 
                 <div class="modal-footer">
@@ -392,8 +401,20 @@
                         <input type="text" name="first_name" id="edit_first_name" required>
                     </div>
                     <div class="form-group">
+                        <label>Middle Name</label>
+                        <input type="text" name="middle_name" id="edit_middle_name" placeholder="Optional">
+                    </div>
+                    <div class="form-group">
                         <label>Last Name</label>
                         <input type="text" name="last_name" id="edit_last_name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Professional Title</label>
+                        <select name="professional_title" id="edit_professional_title">
+                            <option value="">-- Select Title --</option>
+                            <option value="Dr.">Dr. (Doctor)</option>
+                            <option value="Engr.">Engr. (Engineer)</option>
+                        </select>
                     </div>
                     <div class="form-group">
                         <label>Gender</label>
@@ -421,9 +442,10 @@
                     <div class="form-group">
                         <label>Highest Degree Earned</label>
                         <select name="highest_degree" id="edit_highest_degree" required>
-                            <option value="">Select degree</option>
+                            <option value="">-- Select Degree --</option>
+                            <option value="Bachelor's Degree">Bachelor's Degree</option>
                             <option value="Master's Degree">Master's Degree</option>
-                            <option value="Doctoral's Degree">Doctoral's Degree</option>
+                            <option value="Doctoral Degree">Doctoral Degree</option>
                         </select>
                     </div>
                 </div>
@@ -443,30 +465,26 @@
                     </div>
                 </div>
 
-                <!-- Multiselect Design -->
+                <!-- Specialization Dropdown -->
                 <div class="form-group">
                     <label>Specialization</label>
-                    <div class="custom-multiselect" id="edit_multiselect">
-                        <div class="multiselect-header" onclick="toggleMultiselect('edit')">
-                            <div class="multiselect-selected">
-                                <span class="multiselect-placeholder">Select specializations...</span>
-                            </div>
-                            <div class="multiselect-arrow">▼</div>
-                        </div>
-                        <div class="multiselect-dropdown" id="edit_dropdown">
-                            <div class="multiselect-search">
-                                <input type="text" placeholder="Search courses..." oninput="filterMultiselectOptions('edit', this.value)">
-                            </div>
-                            <div class="multiselect-options" id="edit_options">
-                                {% for course in courses %}
-                                <div class="multiselect-option" data-value="{{ course.id }}" data-text="{{ course.course_code }} - {{ course.descriptive_title }}" onclick="toggleOption('edit', this)">
-                                    <input type="checkbox">
-                                    <span>{{ course.course_code }} - {{ course.descriptive_title }}</span>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        </div>
-                    </div>
+                    <select name="specialization" id="edit_specialization" onchange="toggleCustomSpecialization('edit', this.value)">
+                        <option value="">-- Select Specialization --</option>
+                        <option value="computer_networking">Computer Networking</option>
+                        <option value="digital_electronics">Digital Electronics</option>
+                        <option value="software_dev">Software Development</option>
+                        <option value="machine_learning">Machine Learning</option>
+                        <option value="cyber_security">Cyber Security</option>
+                        <option value="system_administration">System Administration</option>
+                        <option value="computer_architecture">Computer Architecture</option>
+                        <option value="embedded_systems">Embedded Systems</option>
+                        <option value="add_specialization">Add Specialization</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="edit_custom_specialization" style="display: none;">
+                    <label>Enter Custom Specialization</label>
+                    <input type="text" id="edit_custom_spec_input" placeholder="e.g., Data Analytics">
                 </div>
 
                 <div class="modal-footer">
@@ -479,10 +497,6 @@
 
     <script>
         let currentFacultyId = null;
-        const multiselectStates = {
-            add: { selected: [] },
-            edit: { selected: [] }
-        };
 
         function getCookie(name) {
             let cookieValue = null;
@@ -498,113 +512,6 @@
             }
             return cookieValue;
         }
-
-        // Multiselect functions
-        function toggleMultiselect(mode) {
-            const dropdown = document.getElementById(`${mode}_dropdown`);
-            const header = document.querySelector(`#${mode}_multiselect .multiselect-header`);
-            
-            dropdown.classList.toggle('show');
-            header.classList.toggle('active');
-            
-            // Close other multiselect
-            const otherMode = mode === 'add' ? 'edit' : 'add';
-            document.getElementById(`${otherMode}_dropdown`).classList.remove('show');
-            document.querySelector(`#${otherMode}_multiselect .multiselect-header`).classList.remove('active');
-        }
-
-        function toggleOption(mode, element) {
-            event.stopPropagation();
-            const value = element.dataset.value;
-            const text = element.dataset.text;
-            const checkbox = element.querySelector('input[type="checkbox"]');
-            
-            checkbox.checked = !checkbox.checked;
-            element.classList.toggle('selected');
-            
-            if (checkbox.checked) {
-                if (!multiselectStates[mode].selected.includes(value)) {
-                    multiselectStates[mode].selected.push(value);
-                }
-            } else {
-                multiselectStates[mode].selected = multiselectStates[mode].selected.filter(v => v !== value);
-            }
-            
-            updateMultiselectDisplay(mode);
-        }
-
-        function updateMultiselectDisplay(mode) {
-            const selectedContainer = document.querySelector(`#${mode}_multiselect .multiselect-selected`);
-            const selected = multiselectStates[mode].selected;
-            
-            if (selected.length === 0) {
-                selectedContainer.innerHTML = '<span class="multiselect-placeholder">Select specializations...</span>';
-            } else {
-                let html = '';
-                selected.forEach(value => {
-                    const option = document.querySelector(`#${mode}_options .multiselect-option[data-value="${value}"]`);
-                    if (option) {
-                        const text = option.dataset.text.split(' - ')[0]; // Show only course code
-                        html += `<span class="selected-tag">${text}<span class="remove-tag" onclick="removeTag('${mode}', '${value}')">&times;</span></span>`;
-                    }
-                });
-                selectedContainer.innerHTML = html;
-            }
-        }
-
-        function removeTag(mode, value) {
-            event.stopPropagation();
-            multiselectStates[mode].selected = multiselectStates[mode].selected.filter(v => v !== value);
-            
-            const option = document.querySelector(`#${mode}_options .multiselect-option[data-value="${value}"]`);
-            if (option) {
-                option.classList.remove('selected');
-                option.querySelector('input[type="checkbox"]').checked = false;
-            }
-            
-            updateMultiselectDisplay(mode);
-        }
-
-        function filterMultiselectOptions(mode, searchTerm) {
-            const options = document.querySelectorAll(`#${mode}_options .multiselect-option`);
-            const lowerSearch = searchTerm.toLowerCase();
-            let hasResults = false;
-            
-            options.forEach(option => {
-                const text = option.dataset.text.toLowerCase();
-                if (text.includes(lowerSearch)) {
-                    option.style.display = 'flex';
-                    hasResults = true;
-                } else {
-                    option.style.display = 'none';
-                }
-            });
-            
-            // Show "no results" message
-            let noResults = document.querySelector(`#${mode}_options .no-results`);
-            if (!hasResults && searchTerm) {
-                if (!noResults) {
-                    noResults = document.createElement('div');
-                    noResults.className = 'no-results';
-                    noResults.textContent = 'No courses found';
-                    document.getElementById(`${mode}_options`).appendChild(noResults);
-                }
-            } else if (noResults) {
-                noResults.remove();
-            }
-        }
-
-        // Close multiselect when clicking outside
-        document.addEventListener('click', function(event) {
-            if (!event.target.closest('.custom-multiselect')) {
-                document.querySelectorAll('.multiselect-dropdown').forEach(dropdown => {
-                    dropdown.classList.remove('show');
-                });
-                document.querySelectorAll('.multiselect-header').forEach(header => {
-                    header.classList.remove('active');
-                });
-            }
-        });
 
         function toggleDropdown(event) {
             if (event && event.stopPropagation) event.stopPropagation();
@@ -664,20 +571,10 @@
 
         function closeModal(modalId) {
             document.getElementById(modalId).style.display = 'none';
-            // Reset multiselect
-            const mode = modalId.includes('add') ? 'add' : 'edit';
-            multiselectStates[mode].selected = [];
-            document.querySelectorAll(`#${mode}_options .multiselect-option`).forEach(opt => {
-                opt.classList.remove('selected');
-                opt.querySelector('input[type="checkbox"]').checked = false;
-            });
-            updateMultiselectDisplay(mode);
         }
 
         function openAddFacultyModal() {
             document.getElementById('addFacultyForm').reset();
-            multiselectStates.add.selected = [];
-            updateMultiselectDisplay('add');
             openModal('addFacultyModal');
         }
 
@@ -692,11 +589,14 @@
                 .then(data => {
                     document.getElementById('edit_faculty_id').value = data.id;
                     document.getElementById('edit_first_name').value = data.first_name;
+                    document.getElementById('edit_middle_name').value = data.middle_name || '';
                     document.getElementById('edit_last_name').value = data.last_name;
                     document.getElementById('edit_email').value = data.email;
                     document.getElementById('edit_gender').value = data.gender;
+                    document.getElementById('edit_professional_title').value = data.professional_title || '';
                     document.getElementById('edit_employment_status').value = data.employment_status;
                     document.getElementById('edit_highest_degree').value = data.highest_degree;
+                    document.getElementById('edit_specialization').value = data.specialization || '';
                     document.getElementById('edit_prc_qualified').checked = data.prc_licensed;
                     document.getElementById('edit_prc_not_applicable').checked = !data.prc_licensed;
                     
@@ -706,15 +606,6 @@
                     } else {
                         document.getElementById('edit_role_staff').checked = true;
                     }
-                    
-                    // Set specializations in multiselect
-                    multiselectStates.edit.selected = data.specialization.map(String);
-                    document.querySelectorAll('#edit_options .multiselect-option').forEach(option => {
-                        const isSelected = data.specialization.includes(parseInt(option.dataset.value));
-                        option.classList.toggle('selected', isSelected);
-                        option.querySelector('input[type="checkbox"]').checked = isSelected;
-                    });
-                    updateMultiselectDisplay('edit');
                     
                     openModal('editFacultyModal');
                 })
@@ -731,11 +622,17 @@
                 showNotification('Only @tip.edu.ph email addresses can be used to create an account.', 'error');
                 return;
             }
-            
-            // Add selected specializations from multiselect
-            multiselectStates.add.selected.forEach(value => {
-                formData.append('specialization', value);
-            });
+
+            // Handle custom specialization
+            const specialization = formData.get('specialization');
+            if (specialization === 'add_specialization') {
+                const customSpec = document.getElementById('add_custom_spec_input').value.trim();
+                if (!customSpec) {
+                    showNotification('Please enter a custom specialization.', 'error');
+                    return;
+                }
+                formData.set('specialization', customSpec);
+            }
             
             fetch('/admin/faculty/add/', {
                 method: 'POST',
@@ -773,11 +670,17 @@
             event.preventDefault();
             const formData = new FormData(event.target);
             const facultyId = document.getElementById('edit_faculty_id').value;
-            
-            // Add selected specializations from multiselect
-            multiselectStates.edit.selected.forEach(value => {
-                formData.append('specialization', value);
-            });
+
+            // Handle custom specialization
+            const specialization = formData.get('specialization');
+            if (specialization === 'add_specialization') {
+                const customSpec = document.getElementById('edit_custom_spec_input').value.trim();
+                if (!customSpec) {
+                    showNotification('Please enter a custom specialization.', 'error');
+                    return;
+                }
+                formData.set('specialization', customSpec);
+            }
             
             fetch(`/admin/faculty/edit/${facultyId}/`, {
                 method: 'POST',
@@ -867,6 +770,19 @@
                 qualifiedCheckbox.disabled = true;
             } else {
                 qualifiedCheckbox.disabled = false;
+            }
+        }
+
+        function toggleCustomSpecialization(mode, value) {
+            const customContainer = document.getElementById(`${mode}_custom_specialization`);
+            const customInput = document.getElementById(`${mode}_custom_spec_input`);
+            
+            if (value === 'add_specialization') {
+                customContainer.style.display = 'block';
+                customInput.focus();
+            } else {
+                customContainer.style.display = 'none';
+                customInput.value = '';
             }
         }
 

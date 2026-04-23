@@ -5,12 +5,16 @@ class FacultyProfileForm(forms.ModelForm):
     """Form for faculty to update their profile information"""
     class Meta:
         model = Faculty
-        fields = ['first_name', 'last_name', 'email', 'gender', 'profile_picture']
+        fields = ['first_name', 'middle_name', 'last_name', 'email', 'gender', 'professional_title', 'highest_degree', 'specialization', 'profile_picture']
         widgets = {
             'first_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'middle_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Optional'}),
             'last_name': forms.TextInput(attrs={'class': 'form-control'}),
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'gender': forms.Select(attrs={'class': 'form-control'}),
+            'professional_title': forms.Select(attrs={'class': 'form-control'}),
+            'highest_degree': forms.Select(attrs={'class': 'form-control'}),
+            'specialization': forms.Select(attrs={'class': 'form-control'}),
             'profile_picture': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/png,image/jpeg'}),
         }
 

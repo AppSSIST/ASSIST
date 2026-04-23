@@ -33,6 +33,7 @@ let currentSectionId = null;
             // Initialize day and faculty filtering
             filterAvailableDays();
             filterAvailableInstructors('faculty_select');
+            filterCourses('course_select');
             
             switchTab('manual');
             openModal('scheduleModal');
@@ -59,6 +60,62 @@ let currentSectionId = null;
 
             if (sectionId && String(sectionId) !== String(currentSectionId)) {
                 loadScheduleView(sectionId, sectionName, curriculum);
+            }
+        }
+
+        // Filter courses based on selected section
+        function filterCourses(courseSelectId) {
+            const sectionSelect = document.getElementById('section_select');
+            const courseSelect = document.getElementById(courseSelectId);
+            
+            if (!sectionSelect || !courseSelect) return;
+            
+            const selectedSectionOption = sectionSelect.selectedOptions[0];
+            if (!selectedSectionOption || !selectedSectionOption.value) {
+                // If no section selected, show all courses
+                courseSelect.querySelectorAll('option').forEach(option => {
+                    if (option.value === '') {
+                        option.disabled = false;
+                        option.hidden = false;
+                    } else {
+                        option.disabled = false;
+                        option.hidden = false;
+                    }
+                });
+                return;
+            }
+            
+            const sectionCurriculumId = selectedSectionOption.dataset.curriculumId;
+            const sectionYearLevel = selectedSectionOption.dataset.yearLevel;
+            const sectionSemester = selectedSectionOption.dataset.semester;
+            
+            // Filter course options to match section criteria
+            courseSelect.querySelectorAll('option').forEach(option => {
+                if (option.value === '') {
+                    option.disabled = false;
+                    option.hidden = false;
+                    return;
+                }
+                
+                const courseCurriculumId = option.dataset.curriculumId;
+                const courseYearLevel = option.dataset.yearLevel;
+                const courseSemester = option.dataset.semester;
+                
+                // Course matches if it has same curriculum, year level, and semester
+                const matches = (courseCurriculumId === sectionCurriculumId && 
+                                 courseYearLevel === sectionYearLevel && 
+                                 courseSemester === sectionSemester);
+                
+                option.disabled = !matches;
+                option.hidden = !matches;
+            });
+            
+            // Clear the course selection if currently selected course doesn't match
+            if (courseSelect.value) {
+                const selectedCourseOption = courseSelect.selectedOptions[0];
+                if (selectedCourseOption && selectedCourseOption.hidden) {
+                    courseSelect.value = '';
+                }
             }
         }
 
@@ -848,7 +905,7 @@ let currentSectionId = null;
                 block.innerHTML = `
                     <div class="schedule-course-code">${schedule.course_code}</div>
                     <div class="schedule-details">${formatTimeLabel(schedule.start_time)} - ${formatTimeLabel(schedule.end_time)}</div>
-                    <div class="schedule-details">Room: ${schedule.room}</div>
+                    <div class="schedule-details">Room: ${schedule.room || 'TBA'}</div>
                     <div class="schedule-details">Section: ${schedule.section_name || ''}</div>
                     <div class="schedule-details">Professor: ${schedule.faculty || 'TBA'}</div>
                 `;

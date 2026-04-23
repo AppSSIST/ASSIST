@@ -91,16 +91,43 @@ class Faculty(models.Model):
         ('contractual', 'Contractual'),
     ]
     
+    PROFESSIONAL_TITLE_CHOICES = [
+        ('', '-- Select Title --'),
+        ('Dr.', 'Dr. (Doctor)'),
+        ('Engr.', 'Engr. (Engineer)'),
+    ]
+    
+    SPECIALIZATION_CHOICES = [
+        ('computer_networking', 'Computer Networking'),
+        ('digital_electronics', 'Digital Electronics'),
+        ('software_dev', 'Software Development'),
+        ('machine_learning', 'Machine Learning'),
+        ('cyber_security', 'Cyber Security'),
+        ('system_administration', 'System Administration'),
+        ('computer_architecture', 'Computer Architecture'),
+        ('embedded_systems', 'Embedded Systems'),
+        ('other', 'Other'),
+    ]
+    
+    HIGHEST_DEGREE_CHOICES = [
+        ('', '-- Select Degree --'),
+        ('Bachelor\'s Degree', 'Bachelor\'s Degree'),
+        ('Master\'s Degree', 'Master\'s Degree'),
+        ('Doctoral Degree', 'Doctoral Degree'),
+    ]
+    
     user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True, related_name='faculty_profile')
     first_name = models.CharField(max_length=100)
+    middle_name = models.CharField(max_length=100, blank=True, null=True)
     last_name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES, default='M')
+    professional_title = models.CharField(max_length=20, choices=PROFESSIONAL_TITLE_CHOICES, blank=True, default='')
     employment_status = models.CharField(max_length=20, choices=EMPLOYMENT_STATUS_CHOICES, default='full_time')
     profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True, verbose_name='Profile Picture')
-    highest_degree = models.CharField(max_length=100, blank=True)
+    highest_degree = models.CharField(max_length=100, choices=HIGHEST_DEGREE_CHOICES, blank=True, default='')
     prc_licensed = models.BooleanField(default=False, verbose_name='PRC Licensed (Qualified)')
-    specialization = models.ManyToManyField(Course, blank=True, related_name='specialized_faculty')
+    specialization = models.CharField(max_length=50, choices=SPECIALIZATION_CHOICES, blank=True, default='')
     department = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
@@ -109,6 +136,8 @@ class Faculty(models.Model):
         verbose_name_plural = 'Faculty'
     
     def __str__(self):
+        if self.middle_name:
+            return f"{self.last_name}, {self.first_name} {self.middle_name}"
         return f"{self.last_name}, {self.first_name}"
     
     @property
@@ -128,6 +157,8 @@ class Faculty(models.Model):
     
     @property
     def full_name(self):
+        if self.middle_name:
+            return f"{self.first_name} {self.middle_name} {self.last_name}"
         return f"{self.first_name} {self.last_name}"
 
 class Section(models.Model):

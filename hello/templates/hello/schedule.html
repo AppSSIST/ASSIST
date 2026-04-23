@@ -289,13 +289,13 @@
                         <select name="course" id="course_select" required onchange="filterAvailableDays()">
                             <option value="">Select a course...</option>
                             {% for course in all_courses %}
-                            <option value="{{ course.id }}">{{ course.course_code }} - {{ course.descriptive_title }}</option>
+                            <option value="{{ course.id }}" data-curriculum-id="{{ course.curriculum.id }}" data-year-level="{{ course.year_level }}" data-semester="{{ course.semester }}">{{ course.course_code }} - {{ course.descriptive_title }}</option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Instructor</label>
-                        <select name="faculty" id="faculty_select" required>
+                        <select name="faculty" id="faculty_select">
                             <option value="">Select an instructor...</option>
                             {% for faculty in faculty_list %}
                             <option value="{{ faculty.id }}">{{ faculty.last_name }}, {{ faculty.first_name }}</option>
@@ -304,16 +304,16 @@
                     </div>
                     <div class="form-group">
                         <label>Section</label>
-                        <select name="section" id="section_select" required onchange="handleSectionSelectChange()">
+                        <select name="section" id="section_select" required onchange="handleSectionSelectChange(); filterCourses('course_select')">
                             <option value="">Select a section...</option>
                             {% for section in section_list %}
-                            <option value="{{ section.id }}" data-section-name="{{ section.name }}" data-section-curriculum="{{ section.curriculum.name }} ({{ section.curriculum.year }})">{{ section.name }} - {% if section.year_level == 1 %}1st{% elif section.year_level == 2 %}2nd{% elif section.year_level == 3 %}3rd{% else %}4th{% endif %} Year, {% if section.semester == 1 %}1st{% else %}2nd{% endif %} Semester</option>
+                            <option value="{{ section.id }}" data-section-name="{{ section.name }}" data-section-curriculum="{{ section.curriculum.name }} ({{ section.curriculum.year }})" data-curriculum-id="{{ section.curriculum.id }}" data-year-level="{{ section.year_level }}" data-semester="{{ section.semester }}">{{ section.name }} - {% if section.year_level == 1 %}1st{% elif section.year_level == 2 %}2nd{% elif section.year_level == 3 %}3rd{% else %}4th{% endif %} Year, {% if section.semester == 1 %}1st{% else %}2nd{% endif %} Semester</option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Room</label>
-                        <select name="room" id="room_select" required>
+                        <select name="room" id="room_select">
                             <option value="">Select a room...</option>
                             {% for room in room_list %}
                             <option value="{{ room.id }}">{{ room.get_room_type_display }}: {% if room.campus == 'arlegui' %}A{% else %}C{% endif %}-{{ room.room_number }}</option>
@@ -383,16 +383,16 @@
                 </div>
                 <div class="form-group">
                     <label>Course Code</label>
-                    <select name="course" id="edit_course_select" required>
+                    <select name="course" id="edit_course_select" required onchange="filterAvailableDays()">
                         <option value="">Select a course...</option>
                         {% for course in all_courses %}
-                        <option value="{{ course.id }}">{{ course.course_code }} - {{ course.descriptive_title }}</option>
+                        <option value="{{ course.id }}" data-curriculum-id="{{ course.curriculum.id }}" data-year-level="{{ course.year_level }}" data-semester="{{ course.semester }}">{{ course.course_code }} - {{ course.descriptive_title }}</option>
                         {% endfor %}
                     </select>
                 </div>
                 <div class="form-group">
                     <label>Instructor</label>
-                    <select name="faculty" id="edit_faculty_select" required>
+                    <select name="faculty" id="edit_faculty_select">
                         <option value="">Select an instructor...</option>
                         {% for faculty in faculty_list %}
                         <option value="{{ faculty.id }}">{{ faculty.last_name }}, {{ faculty.first_name }}</option>
@@ -401,7 +401,7 @@
                 </div>
                 <div class="form-group">
                     <label>Room</label>
-                    <select name="room" id="edit_room_select" required>
+                    <select name="room" id="edit_room_select">
                         <option value="">Select a room...</option>
                         {% for room in room_list %}
                         <option value="{{ room.id }}">{{ room.get_room_type_display }}: {% if room.campus == 'arlegui' %}A{% else %}C{% endif %}-{{ room.room_number }}</option>

@@ -485,14 +485,16 @@ def add_faculty(request):
         try:
             # Get form data
             first_name = request.POST.get('first_name')
+            middle_name = request.POST.get('middle_name', '')
             last_name = request.POST.get('last_name')
             email = request.POST.get('email')
             gender = request.POST.get('gender')
+            professional_title = request.POST.get('professional_title', '')
             role = request.POST.get('role')
             employment_status = request.POST.get('employment_status')
             highest_degree = request.POST.get('highest_degree', '')
             prc_licensed = request.POST.get('prc_licensed') == 'on'
-            specialization_ids = request.POST.getlist('specialization')
+            specialization = request.POST.get('specialization', '')
             
             # Normalize and validate email domain
             email = email.strip().lower()
@@ -541,18 +543,16 @@ def add_faculty(request):
             faculty = Faculty.objects.create(
                 user=user,
                 first_name=first_name,
+                middle_name=middle_name,
                 last_name=last_name,
                 email=email,
                 gender=gender,
+                professional_title=professional_title,
                 employment_status=employment_status,
                 highest_degree=highest_degree,
-                prc_licensed=prc_licensed
+                prc_licensed=prc_licensed,
+                specialization=specialization
             )
-            
-            # Add specializations
-            if specialization_ids:
-                courses = Course.objects.filter(id__in=specialization_ids)
-                faculty.specialization.set(courses)
             
             # Send email with a password reset invitation link using configured SMTP backend
             email_sent = False
@@ -659,9 +659,11 @@ def edit_faculty(request, faculty_id):
                 })
             
             faculty.first_name = request.POST.get('first_name')
+            faculty.middle_name = request.POST.get('middle_name', '')
             faculty.last_name = request.POST.get('last_name')
             faculty.email = email
             faculty.gender = request.POST.get('gender')
+            faculty.professional_title = request.POST.get('professional_title', '')
             faculty.employment_status = request.POST.get('employment_status')
             # Only update highest_degree if a valid value is provided
             highest_degree = request.POST.get('highest_degree', '').strip()
@@ -669,13 +671,12 @@ def edit_faculty(request, faculty_id):
                 faculty.highest_degree = highest_degree
             faculty.prc_licensed = request.POST.get('prc_licensed') == 'on'
             
-            # Update specializations
-            specialization_ids = request.POST.getlist('specialization')
-            if specialization_ids:
-                courses = Course.objects.filter(id__in=specialization_ids)
-                faculty.specialization.set(courses)
+            # Update specialization
+            specialization = request.POST.get('specialization', '')
+            if specialization:
+                faculty.specialization = specialization
             else:
-                faculty.specialization.clear()
+                faculty.specialization = ''
             
             # Update User account
             if faculty.user:
@@ -713,20 +714,21 @@ def edit_faculty(request, faculty_id):
             })
     
     # Return faculty data for editing
-    specialization_ids = list(faculty.specialization.values_list('id', flat=True))
     role = 'admin' if faculty.user and faculty.user.is_superuser else 'staff'
     
     return JsonResponse({
         'id': faculty.id,
         'first_name': faculty.first_name,
+        'middle_name': faculty.middle_name or '',
         'last_name': faculty.last_name,
         'email': faculty.email,
         'gender': faculty.gender,
+        'professional_title': faculty.professional_title,
         'role': role,
         'employment_status': faculty.employment_status,
         'highest_degree': faculty.highest_degree,
         'prc_licensed': faculty.prc_licensed,
-        'specialization': specialization_ids
+        'specialization': faculty.specialization
     })
 
 @login_required(login_url='admin_login')
@@ -807,19 +809,13 @@ def get_faculty_schedule(request, faculty_id):
             }
             schedule_data.append(schedule_item)
         
-        # Get faculty specializations
-        specializations = []
-        for course in faculty.specialization.all():
-            specializations.append({
-                'course_code': course.course_code,
-                'descriptive_title': course.descriptive_title,
-                'color': course.color
-            })
+        # Get faculty specialization (now a CharField)
+        specialization_value = faculty.specialization or ''
         
         return JsonResponse({
             'success': True,
             'schedules': schedule_data,
-            'specializations': specializations,
+            'specialization': specialization_value,
             'total_units': faculty.total_units
         })
     except Exception as e:
@@ -1802,8 +1798,8 @@ def staff_dashboard(request):
             'section_name': schedule.section.name,
         })
     
-    # Get specializations
-    specializations = faculty.specialization.all()
+    # Get specialization (now a CharField)
+    specialization_value = faculty.specialization or ''
     
     import json
     
@@ -1813,7 +1809,7 @@ def staff_dashboard(request):
         'schedules': json.dumps(schedule_data),  # Serialize to JSON
         'time_slots': [],  # Will be generated by JavaScript
         'days': [],  # Will be generated by JavaScript
-        'specializations': specializations,
+        'specialization': specialization_value,
     }
     
     return render(request, 'hello/staff_dashboard.html', context)
@@ -1852,7 +1848,8 @@ def staff_schedule(request):
             'section_name': schedule.section.name,
         })
 
-    specializations = faculty.specialization.all()
+    # Get specialization (now a CharField)
+    specialization_value = faculty.specialization or ''
 
     import json
 
@@ -1862,7 +1859,7 @@ def staff_schedule(request):
         'schedules': json.dumps(schedule_data),
         'time_slots': [],
         'days': [],
-        'specializations': specializations,
+        'specialization': specialization_value,
     }
 
     return render(request, 'hello/staff_schedule.html', context)
@@ -3915,19 +3912,21 @@ def _get_faculty_response_data(request):
         if faculty.profile_picture:
             profile_pic_url = request.build_absolute_uri(faculty.profile_picture.url)
         
-        # FIX: Return a list of descriptive titles (Strings) to match FacultyData model
-        specializations = [course.descriptive_title for course in faculty.specialization.all()]
+        # Get specialization value (now a CharField instead of ManyToMany)
+        specialization = faculty.specialization or ''
 
         return {
-            'id': faculty.id,  # Include ID for matching logic
+            'id': faculty.id,
             'first_name': faculty.first_name,
+            'middle_name': faculty.middle_name or '',
             'last_name': faculty.last_name,
             'email': faculty.email,
             'gender': faculty.gender or '',
+            'professional_title': faculty.professional_title or '',
             'employment_status': faculty.employment_status or 'full_time',
             'highest_degree': faculty.highest_degree or '',
             'prc_licensed': 'Yes' if faculty.prc_licensed else 'No',
-            'specialization': specializations,
+            'specialization': specialization,
             'profile_picture_url': profile_pic_url,
             'total_units': faculty.total_units,
         }
@@ -3937,12 +3936,14 @@ def _get_faculty_response_data(request):
             'id': 0,
             'first_name': request.user.first_name,
             'last_name': request.user.last_name,
+            'middle_name': '',
             'email': request.user.email,
             'gender': '',
+            'professional_title': '',
             'employment_status': 'full_time',
             'highest_degree': '',
             'prc_licensed': 'No',
-            'specialization': [],
+            'specialization': '',
             'profile_picture_url': None,
             'total_units': 0,
         }
@@ -4284,12 +4285,15 @@ def get_faculty_list(request):
             faculty = Faculty.objects.create(
                 user=user,
                 first_name=data.get('first_name', ''),
+                middle_name=data.get('middle_name', ''),
                 last_name=data.get('last_name', ''),
                 email=email,
                 gender=data.get('gender', 'M'),
+                professional_title=data.get('professional_title', ''),
                 employment_status=data.get('employment_status', 'full_time'),
                 highest_degree=data.get('highest_degree', ''),
                 prc_licensed=data.get('prc_licensed', False),
+                specialization=data.get('specialization', ''),
                 department=data.get('department', '')
             )
             
@@ -4316,13 +4320,16 @@ def get_faculty_list(request):
         data.append({
             "id": f.id,
             "first_name": f.first_name,
+            "middle_name": f.middle_name or '',
             "last_name": f.last_name,
             "email": f.email,
             "gender": f.gender,
+            "professional_title": f.professional_title,
             "employment_status": f.employment_status,
             "department": f.department,
             "profile_picture_url": profile_pic_url,
             "highest_degree": f.highest_degree,
+            "specialization": f.specialization,
             "prc_licensed": f.prc_licensed,
             "total_units": f.total_units,
         })
@@ -4615,12 +4622,15 @@ def api_add_faculty(request):
         faculty = Faculty.objects.create(
             user=user,
             first_name=data.get('first_name', ''),
+            middle_name=data.get('middle_name', ''),
             last_name=data.get('last_name', ''),
             email=email,
             gender=data.get('gender', 'M'),
+            professional_title=data.get('professional_title', ''),
             employment_status=data.get('employment_status', 'full_time'),
             highest_degree=data.get('highest_degree', ''),
             prc_licensed=data.get('prc_licensed', False),
+            specialization=data.get('specialization', ''),
             department=data.get('department', '')
         )
         
@@ -4832,19 +4842,13 @@ def api_faculty_schedule(request, faculty_id):
             }
             schedule_data.append(schedule_item)
         
-        # Get faculty specializations
-        specializations = []
-        for course in faculty.specialization.all():
-            specializations.append({
-                'course_code': course.course_code,
-                'descriptive_title': course.descriptive_title,
-                'color': course.color
-            })
+        # Get faculty specialization (now a CharField)
+        specialization_value = faculty.specialization or ''
         
         return Response({
             'faculty_id': faculty.id,
             'schedules': schedule_data,
-            'specializations': specializations,
+            'specialization': specialization_value,
             'total_units': faculty.total_units
         }, status=status.HTTP_200_OK)
         
@@ -4852,7 +4856,7 @@ def api_faculty_schedule(request, faculty_id):
         return Response({
             'faculty_id': None,
             'schedules': [],
-            'specializations': [],
+            'specialization': '',
             'total_units': 0
         }, status=status.HTTP_200_OK)
     except Exception as e:
@@ -5019,19 +5023,13 @@ def api_my_schedule(request):
             }
             schedule_data.append(schedule_item)
         
-        # Get faculty specializations
-        specializations = []
-        for course in faculty.specialization.all():
-            specializations.append({
-                'course_code': course.course_code,
-                'descriptive_title': course.descriptive_title,
-                'color': course.color
-            })
+        # Get faculty specialization (now a CharField)
+        specialization_value = faculty.specialization or ''
         
         return Response({
             'faculty_id': faculty.id,
             'schedules': schedule_data,
-            'specializations': specializations,
+            'specialization': specialization_value,
             'total_units': faculty.total_units
         }, status=status.HTTP_200_OK)
         
@@ -5039,7 +5037,7 @@ def api_my_schedule(request):
         return Response({
             'faculty_id': None,
             'schedules': [],
-            'specializations': [],
+            'specialization': '',
             'total_units': 0
         }, status=status.HTTP_200_OK)
     except Exception as e:
