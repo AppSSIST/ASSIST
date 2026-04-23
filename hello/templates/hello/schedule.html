@@ -286,10 +286,10 @@
                     {% csrf_token %}
                     <div class="form-group">
                         <label>Course Code</label>
-                        <select name="course" id="course_select" required onchange="filterAvailableDays()">
+                        <select name="course" id="course_select" required onchange="filterAvailableDays(); showCourseRequirements()">
                             <option value="">Select a course...</option>
                             {% for course in all_courses %}
-                            <option value="{{ course.id }}" data-curriculum-id="{{ course.curriculum.id }}" data-year-level="{{ course.year_level }}" data-semester="{{ course.semester }}">{{ course.course_code }} - {{ course.descriptive_title }}</option>
+                            <option value="{{ course.id }}" data-curriculum-id="{{ course.curriculum.id }}" data-year-level="{{ course.year_level }}" data-semester="{{ course.semester }}" data-lecture-hours="{{ course.lecture_hours }}" data-laboratory-hours="{{ course.laboratory_hours }}">{{ course.course_code }} - {{ course.descriptive_title }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -313,24 +313,52 @@
                     </div>
                     <div class="form-group">
                         <label>Room</label>
-                        <select name="room" id="room_select">
+                        <select name="room" id="room_select" onchange="validateCourseRoomMatch(); filterAvailableDays()">
                             <option value="">Select a room...</option>
                             {% for room in room_list %}
-                            <option value="{{ room.id }}">{{ room.get_room_type_display }}: {% if room.campus == 'arlegui' %}A{% else %}C{% endif %}-{{ room.room_number }}</option>
+                            <option value="{{ room.id }}" data-room-type="{{ room.room_type }}">{{ room.get_room_type_display }}: {% if room.campus == 'arlegui' %}A{% else %}C{% endif %}-{{ room.room_number }}</option>
                             {% endfor %}
                         </select>
                     </div>
+                    
+                    <div id="course-requirements-info" style="display:none; padding: 12px; background-color: #e3f2fd; border-radius: 4px; margin: 10px 0; color: #1565c0; border-left: 4px solid #1565c0;">
+                        <div style="font-weight: 600; margin-bottom: 8px;">Course Requirements:</div>
+                        <div style="font-size: 0.9rem;">
+                            <div id="lec-hours" style="margin: 4px 0;">Lecture Hours: <span id="lec-required">-</span> hrs | Used: <span id="lec-used">-</span> hrs | Remaining: <span id="lec-remaining">-</span> hrs</div>
+                            <div id="lab-hours" style="margin: 4px 0;">Laboratory Hours: <span id="lab-required">-</span> hrs | Used: <span id="lab-used">-</span> hrs | Remaining: <span id="lab-remaining">-</span> hrs</div>
+                        </div>
+                    </div>
+
+                    <div id="course-warning" style="display:none; padding: 12px; background-color: #fff3cd; border-radius: 4px; margin: 10px 0; color: #856404; border-left: 4px solid #ffc107;">
+                        <strong>⚠ Warning:</strong> <span id="warning-text"></span>
+                    </div>
                     <div class="form-group">
-                        <label>Day</label>
-                        <select name="day" id="day_select" required onchange="filterAvailableInstructors('faculty_select'); filterAvailableRooms('room_select')">
-                            <option value="">Select a day...</option>
-                            <option value="0">Monday</option>
-                            <option value="1">Tuesday</option>
-                            <option value="2">Wednesday</option>
-                            <option value="3">Thursday</option>
-                            <option value="4">Friday</option>
-                            <option value="5">Saturday</option>
-                        </select>
+                        <label>Days</label>
+                        <div class="multiselect-dropdown">
+                            <button type="button" class="multiselect-button" onclick="toggleDayDropdown(event)" id="dayDropdownButton">
+                                Select days...
+                            </button>
+                            <div class="multiselect-menu" id="dayDropdownMenu">
+                                <label class="multiselect-checkbox-label">
+                                    <input type="checkbox" name="day" value="0" onchange="updateDayDropdownLabel()"> Monday
+                                </label>
+                                <label class="multiselect-checkbox-label">
+                                    <input type="checkbox" name="day" value="1" onchange="updateDayDropdownLabel()"> Tuesday
+                                </label>
+                                <label class="multiselect-checkbox-label">
+                                    <input type="checkbox" name="day" value="2" onchange="updateDayDropdownLabel()"> Wednesday
+                                </label>
+                                <label class="multiselect-checkbox-label">
+                                    <input type="checkbox" name="day" value="3" onchange="updateDayDropdownLabel()"> Thursday
+                                </label>
+                                <label class="multiselect-checkbox-label">
+                                    <input type="checkbox" name="day" value="4" onchange="updateDayDropdownLabel()"> Friday
+                                </label>
+                                <label class="multiselect-checkbox-label">
+                                    <input type="checkbox" name="day" value="5" onchange="updateDayDropdownLabel()"> Saturday
+                                </label>
+                            </div>
+                        </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -383,13 +411,26 @@
                 </div>
                 <div class="form-group">
                     <label>Course Code</label>
-                    <select name="course" id="edit_course_select" required onchange="filterAvailableDays()">
+                    <select name="course" id="edit_course_select" required onchange="filterAvailableDays(); showCourseRequirements('edit'); validateCourseRoomMatchEdit()">
                         <option value="">Select a course...</option>
                         {% for course in all_courses %}
-                        <option value="{{ course.id }}" data-curriculum-id="{{ course.curriculum.id }}" data-year-level="{{ course.year_level }}" data-semester="{{ course.semester }}">{{ course.course_code }} - {{ course.descriptive_title }}</option>
+                        <option value="{{ course.id }}" data-curriculum-id="{{ course.curriculum.id }}" data-year-level="{{ course.year_level }}" data-semester="{{ course.semester }}" data-lecture-hours="{{ course.lecture_hours }}" data-laboratory-hours="{{ course.laboratory_hours }}">{{ course.course_code }} - {{ course.descriptive_title }}</option>
                         {% endfor %}
                     </select>
                 </div>
+                
+                <div id="edit_course-requirements-info" style="display:none; padding: 12px; background-color: #e3f2fd; border-radius: 4px; margin: 10px 0; color: #1565c0; border-left: 4px solid #1565c0;">
+                    <div style="font-weight: 600; margin-bottom: 8px;">Course Requirements:</div>
+                    <div style="font-size: 0.9rem;">
+                        <div id="edit_lec-hours" style="margin: 4px 0;">Lecture Hours: <span id="edit_lec-required">-</span> hrs | Used: <span id="edit_lec-used">-</span> hrs | Remaining: <span id="edit_lec-remaining">-</span> hrs</div>
+                        <div id="edit_lab-hours" style="margin: 4px 0;">Laboratory Hours: <span id="edit_lab-required">-</span> hrs | Used: <span id="edit_lab-used">-</span> hrs | Remaining: <span id="edit_lab-remaining">-</span> hrs</div>
+                    </div>
+                </div>
+
+                <div id="edit_course-warning" style="display:none; padding: 12px; background-color: #fff3cd; border-radius: 4px; margin: 10px 0; color: #856404; border-left: 4px solid #ffc107;">
+                    <strong>⚠ Warning:</strong> <span id="edit_warning-text"></span>
+                </div>
+                
                 <div class="form-group">
                     <label>Instructor</label>
                     <select name="faculty" id="edit_faculty_select">
@@ -401,10 +442,10 @@
                 </div>
                 <div class="form-group">
                     <label>Room</label>
-                    <select name="room" id="edit_room_select">
+                    <select name="room" id="edit_room_select" onchange="validateCourseRoomMatchEdit()">
                         <option value="">Select a room...</option>
                         {% for room in room_list %}
-                        <option value="{{ room.id }}">{{ room.get_room_type_display }}: {% if room.campus == 'arlegui' %}A{% else %}C{% endif %}-{{ room.room_number }}</option>
+                        <option value="{{ room.id }}" data-room-type="{{ room.room_type }}">{{ room.get_room_type_display }}: {% if room.campus == 'arlegui' %}A{% else %}C{% endif %}-{{ room.room_number }}</option>
                         {% endfor %}
                     </select>
                 </div>

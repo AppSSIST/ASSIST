@@ -33,9 +33,9 @@ services:
       - key: EMAIL_HOST_USER
         value: "apikey"
       - key: EMAIL_HOST_PASSWORD
-        value: ""
+        value: "xsmtpsib-5f40c0982f19cbb695e8b362f00508ce3a6bb594576344461ed9c65732c1a44b-ARFiDWBkO0Bmgf2I"
       - key: BREVO_API_KEY
-        value: ""
+        value: "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"
       - key: EMAIL_TIMEOUT
         value: "10"
       - key: DEFAULT_FROM_EMAIL

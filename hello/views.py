@@ -1,5 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
+from django.contrib.auth import views as auth_views
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import JsonResponse, Http404, HttpResponse
@@ -103,14 +104,26 @@ def send_email_via_brevo_api(subject, message, from_email, recipients):
         'api-key': settings.BREVO_API_KEY,
     }
 
-    response = requests.post(
-        'https://api.brevo.com/v3/smtp/email',
-        json=payload,
-        headers=headers,
-        timeout=settings.EMAIL_TIMEOUT,
-    )
-    response.raise_for_status()
-    return response.json()
+    try:
+        response = requests.post(
+            'https://api.brevo.com/v3/smtp/email',
+            json=payload,
+            headers=headers,
+            timeout=settings.EMAIL_TIMEOUT,
+        )
+        
+        # Log response for debugging
+        print(f"Brevo API Response Status: {response.status_code}")
+        print(f"Brevo API Response Body: {response.text}")
+        
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Brevo API Error: {str(e)}"
+        if hasattr(e, 'response') and e.response is not None:
+            error_msg += f" | Response: {e.response.text}"
+        print(error_msg)
+        raise ValueError(error_msg)
 
 
 def admin_login(request):
@@ -554,7 +567,7 @@ def add_faculty(request):
                 specialization=specialization
             )
             
-            # Send email with a password reset invitation link using configured SMTP backend
+            # Send email with a password reset invitation link using Brevo API
             email_sent = False
             try:
                 uid = urlsafe_base64_encode(force_bytes(user.pk))
@@ -579,30 +592,27 @@ If you did not request this account, please contact the administrator immediatel
 Best regards,
 ASSIST Administration Team'''
 
-                if getattr(settings, 'BREVO_API_KEY', ''):
+                try:
                     send_email_via_brevo_api(
                         subject,
                         message,
                         settings.DEFAULT_FROM_EMAIL,
                         [email],
                     )
-                else:
-                    send_mail(
-                        subject,
-                        message,
-                        settings.DEFAULT_FROM_EMAIL,
-                        [email],
-                        fail_silently=False,
+                    email_sent = True
+                    message_text = f'Faculty added successfully. An invitation email has been sent to {email}.'
+                except Exception as brevo_error:
+                    # If Brevo fails, log the error and inform user
+                    email_sent = False
+                    message_text = (
+                        'Faculty added successfully, but email could not be sent. '
+                        'Please check your Brevo API key configuration.'
                     )
-
-                email_sent = True
-                message_text = f'Faculty added successfully. An invitation email has been sent to {email}.'
             except Exception as e:
-                print(f"Error sending invitation email: {str(e)}")
                 email_sent = False
                 message_text = (
                     'Faculty added successfully, but email could not be sent. '
-                    'Please check your SMTP settings and credentials.'
+                    'An error occurred during email processing.'
                 )
             
             # Log activity
@@ -625,8 +635,6 @@ ASSIST Administration Team'''
             
         except Exception as e:
             import traceback
-            print(f"Error adding faculty: {str(e)}")
-            print(traceback.format_exc())
             return JsonResponse({
                 'success': False,
                 'errors': [f'Error adding faculty: {str(e)}']
@@ -3043,6 +3051,7 @@ def get_section_schedule(request, section_id):
         for schedule in schedules:
             schedule_item = {
                 'id': schedule.id,
+                'section_id': schedule.section.id,
                 'day': schedule.day,
                 'start_time': schedule.start_time,
                 'end_time': schedule.end_time,
@@ -3053,6 +3062,7 @@ def get_section_schedule(request, section_id):
                 'course_color': schedule.course.color,
                 'faculty': f"{schedule.faculty.first_name} {schedule.faculty.last_name}" if schedule.faculty else 'TBA',
                 'room': schedule.room.name if schedule.room else 'TBA',
+                'room_type': schedule.room.room_type if schedule.room else None,
                 'section_name': schedule.section.name,
             }
             schedule_data.append(schedule_item)
@@ -3955,8 +3965,73 @@ def get_user_faculty_data(request):
     data = _get_faculty_response_data(request)
     return Response(data, status=status.HTTP_200_OK)
 
+
+class CustomPasswordResetView(auth_views.PasswordResetView):
+    """Custom password reset view that sends emails via Brevo API instead of Django's email backend"""
+    
+    def form_valid(self, form):
+        """Override form_valid to use Brevo API instead of Django's email backend"""
+        # Django's PasswordResetView uses 'email' field, not 'username'
+        email = form.cleaned_data['email']
+        
+        # Get the user object
+        from django.contrib.auth.models import User
+        try:
+            user_obj = User.objects.get(email=email)
+        except (User.DoesNotExist, User.MultipleObjectsReturned):
+            # Return same response as normal to not leak user existence
+            return super().form_valid(form)
+        
+        # Generate password reset token
+        from django.contrib.auth.tokens import default_token_generator
+        from django.utils.http import urlsafe_base64_encode
+        from django.utils.encoding import force_bytes
+        
+        uid = urlsafe_base64_encode(force_bytes(user_obj.pk))
+        token = default_token_generator.make_token(user_obj)
+        
+        # Build reset URL
+        reset_url = self.request.build_absolute_uri(
+            reverse('password_reset_confirm', kwargs={'uidb64': uid, 'token': token})
+        )
+        
+        # Compose email
+        subject = 'Password Reset Request for ASSIST'
+        message = f'''Hello {user_obj.first_name},
+
+You have requested to reset your password for the ASSIST system.
+
+Please click the following link to reset your password:
+{reset_url}
+
+This link will expire in 7 days.
+
+If you did not request this password reset, please ignore this email.
+
+Best regards,
+ASSIST Administration Team'''
+        
+        # Send via Brevo API
+        try:
+            print(f"[CustomPasswordResetView] Sending password reset email to: {user_obj.email}")
+            send_email_via_brevo_api(
+                subject,
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                [user_obj.email],
+            )
+            print(f"[CustomPasswordResetView] Email sent successfully to {user_obj.email}")
+        except Exception as e:
+            print(f"[CustomPasswordResetView] Failed to send email: {str(e)}")
+            import traceback
+            traceback.print_exc()
+        
+        # Return to password reset done page
+        return redirect(self.success_url)
+
+
 def api_password_reset(request):
-    """API endpoint to send password reset email"""
+    """API endpoint to send password reset email via Brevo"""
     if request.method == 'POST':
         try:
             import json
@@ -3987,7 +4062,7 @@ def api_password_reset(request):
                 reverse('password_reset_confirm', kwargs={'uidb64': uid, 'token': token})
             )
 
-            # Send email
+            # Send email via Brevo API
             subject = 'Password Reset Request for ASSIST'
             message = f'''Hello {user.first_name},
 
@@ -4004,23 +4079,30 @@ Best regards,
 ASSIST Administration Team'''
 
             try:
-                email_message = EmailMessage(
-                    subject=subject,
-                    body=message,
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    to=[email],
+                print(f"Attempting to send password reset email to: {email}")
+                print(f"From email: {settings.DEFAULT_FROM_EMAIL}")
+                print(f"Brevo API Key configured: {bool(settings.BREVO_API_KEY)}")
+                
+                send_email_via_brevo_api(
+                    subject,
+                    message,
+                    settings.DEFAULT_FROM_EMAIL,
+                    [email],
                 )
-                email_message.send(fail_silently=False)
+                print(f"Email sent successfully to {email}")
+                return JsonResponse({'message': 'If an account with this email exists, a password reset link has been sent.'})
             except Exception as e:
-                print(f"Error sending password reset email: {str(e)}")
-                return JsonResponse({'error': 'Failed to send email'}, status=500)
-
-            return JsonResponse({'message': 'If an account with this email exists, a password reset link has been sent.'})
+                print(f"Email sending failed: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                return JsonResponse({'error': f'Failed to send email: {str(e)}'}, status=500)
 
         except json.JSONDecodeError:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
         except Exception as e:
-            print(f"Error in api_password_reset: {str(e)}")
+            print(f"Password reset error: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return JsonResponse({'error': 'Internal server error'}, status=500)
 
     return JsonResponse({'error': 'Method not allowed'}, status=405)
@@ -4591,6 +4673,8 @@ def api_add_faculty(request):
         
         # Generate username from email
         email = data.get('email', '').strip().lower()
+        first_name = data.get('first_name', '')
+        last_name = data.get('last_name', '')
         
         # Check if email already exists
         if Faculty.objects.filter(email__iexact=email).exists() or User.objects.filter(email__iexact=email).exists():
@@ -4609,8 +4693,8 @@ def api_add_faculty(request):
             username=username,
             email=email,
             password=password,
-            first_name=data.get('first_name', ''),
-            last_name=data.get('last_name', '')
+            first_name=first_name,
+            last_name=last_name
         )
         
         # Set staff permissions
@@ -4621,9 +4705,9 @@ def api_add_faculty(request):
         # Create faculty record
         faculty = Faculty.objects.create(
             user=user,
-            first_name=data.get('first_name', ''),
+            first_name=first_name,
             middle_name=data.get('middle_name', ''),
-            last_name=data.get('last_name', ''),
+            last_name=last_name,
             email=email,
             gender=data.get('gender', 'M'),
             professional_title=data.get('professional_title', ''),
@@ -4634,12 +4718,56 @@ def api_add_faculty(request):
             department=data.get('department', '')
         )
         
+        # Send invitation email via Brevo API
+        email_sent = False
+        try:
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+            reset_path = reverse('password_reset_confirm', kwargs={'uidb64': uid, 'token': token})
+            reset_url = request.build_absolute_uri(reset_path)
+
+            subject = 'Your ASSIST Account Invitation'
+            message = f'''Hello {first_name},
+
+Your ASSIST account has been created successfully.
+
+Username: {username}
+
+To complete your account setup and choose a secure password, click the link below:
+{reset_url}
+
+If you cannot click the link, copy and paste it into your browser.
+
+If you did not request this account, please contact the administrator immediately.
+
+Best regards,
+ASSIST Administration Team'''
+
+            try:
+                send_email_via_brevo_api(
+                    subject,
+                    message,
+                    settings.DEFAULT_FROM_EMAIL,
+                    [email],
+                )
+                email_sent = True
+            except Exception as brevo_error:
+                # If Brevo fails, log the error but don't fail the API call
+                print(f"Brevo email send error: {str(brevo_error)}")
+                email_sent = False
+        except Exception as e:
+            # If any error occurs during email sending, log it but continue
+            print(f"Error during email preparation: {str(e)}")
+            email_sent = False
+        
         return Response({
             "id": faculty.id,
             "first_name": faculty.first_name,
             "last_name": faculty.last_name,
             "email": faculty.email,
-            "employment_status": faculty.employment_status
+            "employment_status": faculty.employment_status,
+            "email_sent": email_sent,
+            "message": "Faculty added successfully. " + ("Invitation email has been sent." if email_sent else "Email could not be sent at this time.")
         }, status=status.HTTP_201_CREATED)
         
     except Exception as e:

@@ -177,7 +177,10 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# Email configuration: Print emails to console for development
+# Email configuration
+# Using Brevo API for sending emails
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@example.com')
+BREVO_API_KEY = config('BREVO_API_KEY', default=None)
+EMAIL_TIMEOUT = int(config('EMAIL_TIMEOUT', default='10'))
 

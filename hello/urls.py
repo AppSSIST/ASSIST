@@ -57,7 +57,7 @@ urlpatterns = [
     # Auth
     path('admin/logout/', views.admin_logout, name='admin_logout'),
     path('admin/password-reset/', 
-         auth_views.PasswordResetView.as_view(
+         views.CustomPasswordResetView.as_view(
              template_name='hello/password_reset.html',
              email_template_name='hello/password_reset_email.html',
              success_url=reverse_lazy('password_reset_done')

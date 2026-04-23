@@ -18,25 +18,77 @@ let currentSectionId = null;
 
         // Modal management
         function openScheduleModal() {
-            // Reset form fields
-            document.getElementById('course_select').value = '';
-            document.getElementById('faculty_select').value = '';
-            document.getElementById('section_select').value = currentSectionId || '';
-            document.getElementById('room_select').value = '';
-            document.getElementById('day_select').value = '';
-            document.getElementById('start_time').value = '07:30';
-            document.getElementById('end_time').value = '08:30';
-            document.getElementById('duration-display').style.display = 'none';
-            setTimeDisplay('start_time');
-            setTimeDisplay('end_time');
-            
-            // Initialize day and faculty filtering
-            filterAvailableDays();
-            filterAvailableInstructors('faculty_select');
-            filterCourses('course_select');
-            
-            switchTab('manual');
-            openModal('scheduleModal');
+            try {
+                console.log('DEBUG: openScheduleModal() called');
+                
+                // Reset form fields
+                const courseSelect = document.getElementById('course_select');
+                const facultySelect = document.getElementById('faculty_select');
+                const sectionSelect = document.getElementById('section_select');
+                const roomSelect = document.getElementById('room_select');
+                
+                if (!courseSelect || !facultySelect || !sectionSelect || !roomSelect) {
+                    console.error('ERROR: Required form elements not found', {
+                        courseSelect: !!courseSelect,
+                        facultySelect: !!facultySelect,
+                        sectionSelect: !!sectionSelect,
+                        roomSelect: !!roomSelect
+                    });
+                    showAlert('Error: Form elements not found. Please reload the page.', 'error');
+                    return;
+                }
+                
+                courseSelect.value = '';
+                facultySelect.value = '';
+                sectionSelect.value = currentSectionId || '';
+                roomSelect.value = '';
+                
+                // Reset day checkboxes (new multiselect checkbox implementation)
+                document.querySelectorAll('input[name="day"]').forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+                updateDayDropdownLabel(); // Reset dropdown button text
+                
+                const startTime = document.getElementById('start_time');
+                const endTime = document.getElementById('end_time');
+                if (startTime && endTime) {
+                    startTime.value = '07:30';
+                    endTime.value = '08:30';
+                }
+                
+                const durationDisplay = document.getElementById('duration-display');
+                const courseReqInfo = document.getElementById('course-requirements-info');
+                const courseWarning = document.getElementById('course-warning');
+                
+                if (durationDisplay) durationDisplay.style.display = 'none';
+                if (courseReqInfo) courseReqInfo.style.display = 'none';
+                if (courseWarning) courseWarning.style.display = 'none';
+                
+                if (startTime) setTimeDisplay('start_time');
+                if (endTime) setTimeDisplay('end_time');
+                
+                // Initialize day and faculty filtering
+                console.log('DEBUG: Calling filterAvailableDays...');
+                filterAvailableDays();
+                
+                console.log('DEBUG: Calling filterAvailableInstructors...');
+                filterAvailableInstructors('faculty_select');
+                
+                console.log('DEBUG: Calling filterCourses...');
+                filterCourses('course_select');
+                
+                console.log('DEBUG: Calling switchTab...');
+                switchTab('manual');
+                
+                console.log('DEBUG: Opening modal...');
+                openModal('scheduleModal');
+                
+                console.log('DEBUG: openScheduleModal() completed successfully');
+            } catch (error) {
+                console.error('ERROR in openScheduleModal():', error);
+                console.error('Stack:', error.stack);
+                showAlert(`Error opening schedule modal: ${error.message}`, 'error');
+            }
         }
 
         function openModal(modalId) {
@@ -46,6 +98,46 @@ let currentSectionId = null;
         function closeModal(modalId) {
             document.getElementById(modalId).style.display = 'none';
         }
+
+        // Multi-select dropdown handler
+        function toggleDayDropdown(event) {
+            event.preventDefault();
+            const menu = document.getElementById('dayDropdownMenu');
+            const button = document.getElementById('dayDropdownButton');
+            menu.classList.toggle('open');
+            button.classList.toggle('open');
+        }
+
+        // Update dropdown button label based on selected days
+        function updateDayDropdownLabel() {
+            const dayCheckboxes = document.querySelectorAll('input[name="day"]:checked');
+            const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const button = document.getElementById('dayDropdownButton');
+            
+            if (dayCheckboxes.length === 0) {
+                button.innerHTML = '<span style="color: #999;">Select days...</span>';
+            } else if (dayCheckboxes.length === 6) {
+                button.innerHTML = '<span>All days (Monday - Saturday)</span>';
+            } else {
+                const selectedDays = Array.from(dayCheckboxes)
+                    .map(cb => dayNames[parseInt(cb.value)])
+                    .join(', ');
+                button.innerHTML = `<span>${selectedDays}</span>`;
+            }
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.querySelector('.multiselect-dropdown');
+            if (dropdown && !dropdown.contains(event.target)) {
+                const menu = document.getElementById('dayDropdownMenu');
+                const button = document.getElementById('dayDropdownButton');
+                if (menu) {
+                    menu.classList.remove('open');
+                    button.classList.remove('open');
+                }
+            }
+        });
 
         function handleSectionSelectChange() {
             const sectionSelect = document.getElementById('section_select');
@@ -68,10 +160,13 @@ let currentSectionId = null;
             const sectionSelect = document.getElementById('section_select');
             const courseSelect = document.getElementById(courseSelectId);
             
+            console.log('DEBUG filterCourses called with:', courseSelectId);
+            
             if (!sectionSelect || !courseSelect) return;
             
             const selectedSectionOption = sectionSelect.selectedOptions[0];
             if (!selectedSectionOption || !selectedSectionOption.value) {
+                console.log('  No section selected, showing all courses');
                 // If no section selected, show all courses
                 courseSelect.querySelectorAll('option').forEach(option => {
                     if (option.value === '') {
@@ -88,6 +183,9 @@ let currentSectionId = null;
             const sectionCurriculumId = selectedSectionOption.dataset.curriculumId;
             const sectionYearLevel = selectedSectionOption.dataset.yearLevel;
             const sectionSemester = selectedSectionOption.dataset.semester;
+            const sectionId = selectedSectionOption.value;
+            
+            console.log('  Section selected:', { sectionId, sectionCurriculumId, sectionYearLevel, sectionSemester });
             
             // Filter course options to match section criteria
             courseSelect.querySelectorAll('option').forEach(option => {
@@ -100,24 +198,338 @@ let currentSectionId = null;
                 const courseCurriculumId = option.dataset.curriculumId;
                 const courseYearLevel = option.dataset.yearLevel;
                 const courseSemester = option.dataset.semester;
+                const courseId = option.value;
+                const courseCode = option.dataset.courseCode;
                 
-                // Course matches if it has same curriculum, year level, and semester
+                // Course matches section criteria
                 const matches = (courseCurriculumId === sectionCurriculumId && 
                                  courseYearLevel === sectionYearLevel && 
                                  courseSemester === sectionSemester);
                 
-                option.disabled = !matches;
-                option.hidden = !matches;
+                console.log(`  Checking course ${courseCode} (${courseId}):`, { courseCurriculumId, courseYearLevel, courseSemester, matches });
+                
+                if (!matches) {
+                    console.log(`    HIDING: criteria mismatch`);
+                    option.disabled = true;
+                    option.hidden = true;
+                    return;
+                }
+                
+                // Check if course has all its hours allocated
+                const lectureHours = parseInt(option.dataset.lectureHours) || 0;
+                const labHours = parseInt(option.dataset.laboratoryHours) || 0;
+                
+                const courseHours = getCourseHoursInSection(courseId, sectionId);
+                
+                console.log(`    Hours: lecture=${lectureHours}/${courseHours.lecture}, lab=${labHours}/${courseHours.lab}`);
+                
+                const isComplete = (lectureHours === 0 || courseHours.lecture >= lectureHours) &&
+                                  (labHours === 0 || courseHours.lab >= labHours);
+                
+                console.log(`    isComplete = (${lectureHours}===0 || ${courseHours.lecture}>=${lectureHours}) && (${labHours}===0 || ${courseHours.lab}>=${labHours}) = ${isComplete}`);
+                
+                if (isComplete && lectureHours > 0 && labHours > 0) {
+                    console.log(`    HIDING: course complete`);
+                    option.disabled = true;
+                    option.hidden = true;
+                    option.textContent = `${option.dataset.originalText || option.textContent} (Complete)`;
+                } else {
+                    console.log(`    SHOWING`);
+                    option.disabled = false;
+                    option.hidden = false;
+                }
             });
             
             // Clear the course selection if currently selected course doesn't match
             if (courseSelect.value) {
                 const selectedCourseOption = courseSelect.selectedOptions[0];
                 if (selectedCourseOption && selectedCourseOption.hidden) {
+                    console.log('  Selected course is hidden, clearing selection');
                     courseSelect.value = '';
+                    document.getElementById('course-requirements-info').style.display = 'none';
+                    document.getElementById('course-warning').style.display = 'none';
                 }
             }
         }
+
+        // Get total hours used for a course in a section, EXCLUDING a specific schedule
+        function getCourseHoursInSectionExcluding(courseId, sectionId, excludeScheduleId) {
+            let lectureHours = 0;
+            let labHours = 0;
+            
+            currentSchedules.forEach(schedule => {
+                // Skip the schedule we're excluding (editing)
+                if (schedule.id == excludeScheduleId) {
+                    return;
+                }
+                
+                if (schedule.course_id == courseId && schedule.section_id == sectionId) {
+                    const duration = schedule.duration || 0;
+                    
+                    if (schedule.room_type === 'lecture') {
+                        lectureHours += duration / 60;
+                    } else if (schedule.room_type === 'laboratory') {
+                        labHours += duration / 60;
+                    }
+                }
+            });
+            
+            return { lecture: lectureHours, lab: labHours };
+        }
+
+        // Get total hours used for a course in a section
+        function getCourseHoursInSection(courseId, sectionId) {
+            let lectureHours = 0;
+            let labHours = 0;
+            
+            console.log('DEBUG getCourseHoursInSection:', { courseId, sectionId, schedulesCount: currentSchedules.length });
+            
+            currentSchedules.forEach(schedule => {
+                console.log('  Checking schedule:', { 
+                    scheduleId: schedule.id, 
+                    course_id: schedule.course_id, 
+                    courseId: courseId, 
+                    match: schedule.course_id == courseId,
+                    section_id: schedule.section_id,
+                    sectionId: sectionId,
+                    room_type: schedule.room_type,
+                    duration: schedule.duration
+                });
+                
+                if (schedule.course_id == courseId && schedule.section_id == sectionId) {
+                    const duration = schedule.duration || 0;
+                    console.log('    MATCHED! room_type:', schedule.room_type, 'duration:', duration);
+                    
+                    if (schedule.room_type === 'lecture') {
+                        lectureHours += duration / 60;
+                        console.log('    Added to lecture:', duration / 60, 'total lecture:', lectureHours);
+                    } else if (schedule.room_type === 'laboratory') {
+                        labHours += duration / 60;
+                        console.log('    Added to lab:', duration / 60, 'total lab:', labHours);
+                    } else {
+                        console.log('    WARNING: room_type is neither lecture nor laboratory:', schedule.room_type);
+                    }
+                }
+            });
+            
+            console.log('  RESULT:', { lecture: lectureHours, lab: labHours });
+            return { lecture: lectureHours, lab: labHours };
+        }
+
+        // Show course requirements
+        function showCourseRequirements(mode = '') {
+            const courseSelectId = mode === 'edit' ? 'edit_course_select' : 'course_select';
+            const courseSelect = document.getElementById(courseSelectId);
+            const infoPrefix = mode === 'edit' ? 'edit_' : '';
+            
+            if (!courseSelect || !courseSelect.value) {
+                document.getElementById(infoPrefix + 'course-requirements-info').style.display = 'none';
+                document.getElementById(infoPrefix + 'course-warning').style.display = 'none';
+                return;
+            }
+            
+            const selectedOption = courseSelect.selectedOptions[0];
+            const lectureHours = parseInt(selectedOption.dataset.lectureHours) || 0;
+            const labHours = parseInt(selectedOption.dataset.laboratoryHours) || 0;
+            
+            if (lectureHours === 0 && labHours === 0) {
+                document.getElementById(infoPrefix + 'course-requirements-info').style.display = 'none';
+                return;
+            }
+            
+            const sectionSelect = document.getElementById('section_select');
+            const sectionId = sectionSelect ? sectionSelect.value : null;
+            const courseId = courseSelect.value;
+            
+            if (!sectionId) {
+                document.getElementById(infoPrefix + 'course-requirements-info').style.display = 'none';
+                return;
+            }
+            
+            // Use the excluding function if in edit mode
+            const courseHours = mode === 'edit' 
+                ? getCourseHoursInSectionExcluding(courseId, sectionId, currentEditScheduleId)
+                : getCourseHoursInSection(courseId, sectionId);
+            
+            const lecRemaining = Math.max(0, lectureHours - courseHours.lecture);
+            const labRemaining = Math.max(0, labHours - courseHours.lab);
+            
+            document.getElementById(infoPrefix + 'lec-required').textContent = lectureHours;
+            document.getElementById(infoPrefix + 'lec-used').textContent = courseHours.lecture.toFixed(1);
+            document.getElementById(infoPrefix + 'lec-remaining').textContent = lecRemaining.toFixed(1);
+            
+            document.getElementById(infoPrefix + 'lab-required').textContent = labHours;
+            document.getElementById(infoPrefix + 'lab-used').textContent = courseHours.lab.toFixed(1);
+            document.getElementById(infoPrefix + 'lab-remaining').textContent = labRemaining.toFixed(1);
+            
+            // Hide lecture or lab rows if not required
+            if (lectureHours === 0) {
+                document.getElementById(infoPrefix + 'lec-hours').style.display = 'none';
+            } else {
+                document.getElementById(infoPrefix + 'lec-hours').style.display = 'block';
+            }
+            
+            if (labHours === 0) {
+                document.getElementById(infoPrefix + 'lab-hours').style.display = 'none';
+            } else {
+                document.getElementById(infoPrefix + 'lab-hours').style.display = 'block';
+            }
+            
+            document.getElementById(infoPrefix + 'course-requirements-info').style.display = 'block';
+        }
+
+        // Validate course-room match
+        function validateCourseRoomMatch() {
+            const courseSelect = document.getElementById('course_select');
+            const roomSelect = document.getElementById('room_select');
+            const warningDiv = document.getElementById('course-warning');
+            
+            console.log('DEBUG validateCourseRoomMatch called');
+            
+            if (!courseSelect.value || !roomSelect.value) {
+                console.log('  Missing course or room value');
+                warningDiv.style.display = 'none';
+                return;
+            }
+            
+            const selectedOption = courseSelect.selectedOptions[0];
+            const lectureHours = parseInt(selectedOption.dataset.lectureHours) || 0;
+            const labHours = parseInt(selectedOption.dataset.laboratoryHours) || 0;
+            
+            const roomOption = roomSelect.selectedOptions[0];
+            const roomType = roomOption.dataset.roomType;
+            
+            const sectionSelect = document.getElementById('section_select');
+            const sectionId = sectionSelect ? sectionSelect.value : null;
+            const courseId = courseSelect.value;
+            
+            console.log('  Values:', { lectureHours, labHours, roomType, sectionId, courseId });
+            
+            if (!sectionId) {
+                console.log('  No section ID');
+                warningDiv.style.display = 'none';
+                return;
+            }
+            
+            const courseHours = getCourseHoursInSection(courseId, sectionId);
+            const startTime = document.getElementById('start_time')?.value;
+            const endTime = document.getElementById('end_time')?.value;
+            
+            console.log('  Times:', { startTime, endTime });
+            
+            if (!startTime || !endTime) {
+                console.log('  Missing start or end time');
+                warningDiv.style.display = 'none';
+                return;
+            }
+            
+            const duration = calculateDuration(startTime, endTime) / 60;
+            console.log('  Duration in hours:', duration, 'courseHours:', courseHours);
+            
+            let warning = '';
+            
+            if (roomType === 'lecture') {
+                const lecRemaining = lectureHours - courseHours.lecture;
+                console.log('  Lecture validation: required=' + lectureHours + ', used=' + courseHours.lecture + ', remaining=' + lecRemaining + ', duration=' + duration);
+                if (lecRemaining > 0 && duration > lecRemaining) {
+                    warning = `This schedule would add ${duration}hrs of lecture, but only ${lecRemaining}hrs is remaining. Only ${lecRemaining}hrs is required for lecture.`;
+                    console.log('  WARNING TRIGGERED:', warning);
+                }
+            } else if (roomType === 'laboratory') {
+                const labRemaining = labHours - courseHours.lab;
+                console.log('  Lab validation: required=' + labHours + ', used=' + courseHours.lab + ', remaining=' + labRemaining + ', duration=' + duration);
+                if (labRemaining > 0 && duration > labRemaining) {
+                    warning = `This schedule would add ${duration}hrs of lab, but only ${labRemaining}hrs is remaining. Only ${labRemaining}hrs is required for laboratory.`;
+                    console.log('  WARNING TRIGGERED:', warning);
+                }
+            } else {
+                console.log('  UNEXPECTED: roomType is neither lecture nor laboratory:', roomType);
+            }
+            
+            if (warning) {
+                document.getElementById('warning-text').textContent = warning;
+                warningDiv.style.display = 'block';
+            } else {
+                warningDiv.style.display = 'none';
+            }
+        }
+
+        // Validate course-room match for EDIT modal (excludes current schedule)
+        function validateCourseRoomMatchEdit() {
+            const courseSelect = document.getElementById('edit_course_select');
+            const roomSelect = document.getElementById('edit_room_select');
+            const warningDiv = document.getElementById('edit_course-warning');
+            
+            // Create the warning div if it doesn't exist
+            if (!warningDiv) {
+                const modal = document.getElementById('editScheduleModal');
+                if (modal) {
+                    const div = document.createElement('div');
+                    div.id = 'edit_course-warning';
+                    div.className = 'course-warning alert';
+                    div.style.display = 'none';
+                    div.innerHTML = '<strong>⚠️ Warning:</strong> <span id="edit_warning-text"></span>';
+                    modal.insertBefore(div, modal.querySelector('.form-group'));
+                }
+            }
+            
+            const warningElement = document.getElementById('edit_course-warning');
+            if (!warningElement) return; // Can't warn if div doesn't exist
+            
+            if (!courseSelect || !roomSelect || !courseSelect.value || !roomSelect.value) {
+                warningElement.style.display = 'none';
+                return;
+            }
+            
+            const selectedOption = courseSelect.selectedOptions[0];
+            const lectureHours = parseInt(selectedOption.dataset.lectureHours) || 0;
+            const labHours = parseInt(selectedOption.dataset.laboratoryHours) || 0;
+            
+            const roomOption = roomSelect.selectedOptions[0];
+            const roomType = roomOption.dataset.roomType;
+            
+            const sectionSelect = document.getElementById('section_select');
+            const sectionId = sectionSelect ? sectionSelect.value : null;
+            const courseId = courseSelect.value;
+            
+            if (!sectionId) {
+                warningElement.style.display = 'none';
+                return;
+            }
+            
+            // Use the excluding function for edit mode to not count the current schedule
+            const courseHours = getCourseHoursInSectionExcluding(courseId, sectionId, currentEditScheduleId);
+            const startTime = document.getElementById('edit_start_time')?.value;
+            const endTime = document.getElementById('edit_end_time')?.value;
+            
+            if (!startTime || !endTime) {
+                warningElement.style.display = 'none';
+                return;
+            }
+            
+            const duration = calculateDuration(startTime, endTime) / 60;
+            let warning = '';
+            
+            if (roomType === 'lecture') {
+                const lecNewUsage = courseHours.lecture + duration;
+                if (lectureHours > 0 && lecNewUsage > lectureHours) {
+                    warning = `This would use ${lecNewUsage.toFixed(1)}hrs of lecture, but ${selectedOption.textContent.split(' - ')[0]} requires only ${lectureHours}hrs total.`;
+                }
+            } else if (roomType === 'laboratory') {
+                const labNewUsage = courseHours.lab + duration;
+                if (labHours > 0 && labNewUsage > labHours) {
+                    warning = `This would use ${labNewUsage.toFixed(1)}hrs of lab, but ${selectedOption.textContent.split(' - ')[0]} requires only ${labHours}hrs total.`;
+                }
+            }
+            
+            if (warning) {
+                document.getElementById('edit_warning-text').textContent = warning;
+                warningElement.style.display = 'block';
+            } else {
+                warningElement.style.display = 'none';
+            }
+        }
+
 
         // Alert system
         function showAlert(message, type = 'info') {
@@ -189,55 +601,88 @@ let currentSectionId = null;
         }
 
         // Manual schedule submission - IMPROVED with validation
-        // Filter available days based on selected course
+        // Filter available days based on selected course and time conflicts
         function filterAvailableDays() {
             const courseId = document.getElementById('course_select').value;
-            const daySelect = document.getElementById('day_select');
-            const dayOptions = daySelect.querySelectorAll('option');
+            const roomId = document.getElementById('room_select').value;
+            const startTime = document.getElementById('start_time')?.value;
+            const endTime = document.getElementById('end_time')?.value;
             const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-            const scheduledDays = new Set();
+            const unavailableDays = new Set();
             
-            if (courseId) {
+            console.log('DEBUG filterAvailableDays called');
+            console.log('  courseId:', courseId);
+            console.log('  roomId:', roomId);
+            console.log('  time:', startTime, '-', endTime);
+            console.log('  currentSchedules length:', currentSchedules.length);
+            console.log('  currentSchedules data:', currentSchedules);
+            
+            // Check for conflicts
+            if (courseId && roomId && startTime && endTime) {
                 const selectedCourseCode = document.getElementById('course_select').selectedOptions[0]?.textContent.split(' - ')[0] || '';
-                currentSchedules.forEach(schedule => {
+                console.log('  selectedCourseCode:', selectedCourseCode);
+                
+                currentSchedules.forEach((schedule, idx) => {
+                    console.log(`  Checking schedule ${idx}:`, schedule);
+                    
+                    // Check 1: Duplicate course on same day
                     const scheduleCourseId = schedule.course_id ?? schedule.course?.id ?? schedule.course;
                     const sameCourse = scheduleCourseId != null
                         ? scheduleCourseId == courseId
                         : schedule.course_code && schedule.course_code === selectedCourseCode;
-
-                    if (!sameCourse) {
-                        return;
-                    }
-
+                    
+                    // Check 2: Time conflict in same room
+                    const scheduleRoomId = schedule.room_id ?? schedule.room?.id ?? schedule.room;
+                    const sameRoom = scheduleRoomId == roomId;
+                    const timeConflict = startTime && endTime && schedule.start_time && schedule.end_time 
+                        ? timesOverlap(startTime, endTime, schedule.start_time, schedule.end_time)
+                        : false;
+                    
+                    console.log(`    scheduleCourseId: ${scheduleCourseId}, sameCourse: ${sameCourse}`);
+                    console.log(`    scheduleRoomId: ${scheduleRoomId}, sameRoom: ${sameRoom}, timeConflict: ${timeConflict}`);
+                    
                     let dayIndex = parseInt(schedule.day);
                     if (Number.isNaN(dayIndex)) {
                         dayIndex = dayNames.indexOf(schedule.day);
                     }
+                    
+                    console.log(`    dayIndex: ${dayIndex}`);
+                    
                     if (!Number.isNaN(dayIndex) && dayIndex >= 0) {
-                        scheduledDays.add(dayIndex);
+                        // Mark day as unavailable if:
+                        // 1. Same course already scheduled, OR
+                        // 2. Same room has a time conflict
+                        if (sameCourse) {
+                            console.log(`      -> UNAVAILABLE: Same course ${selectedCourseCode} already on ${dayNames[dayIndex]}`);
+                            unavailableDays.add(dayIndex);
+                        } else if (sameRoom && timeConflict) {
+                            console.log(`      -> UNAVAILABLE: Room conflict on ${dayNames[dayIndex]}: ${startTime}-${endTime} overlaps with ${schedule.start_time}-${schedule.end_time}`);
+                            unavailableDays.add(dayIndex);
+                        }
                     }
                 });
             }
             
-            dayOptions.forEach(option => {
-                const dayValue = option.value;
-                if (dayValue === '') {
-                    option.disabled = false;
-                    option.hidden = false;
-                    option.textContent = 'Select a day...';
-                    return;
+            console.log('DEBUG: unavailableDays =', Array.from(unavailableDays).map(d => dayNames[d]));
+            
+            // Update checkbox visibility - hide unavailable days
+            document.querySelectorAll('input[name="day"]').forEach(checkbox => {
+                const dayNum = parseInt(checkbox.value);
+                const isUnavailable = unavailableDays.has(dayNum);
+                
+                const label = checkbox.parentElement;
+                if (isUnavailable) {
+                    label.style.display = 'none';
+                    // Uncheck if it becomes hidden
+                    if (checkbox.checked) {
+                        checkbox.checked = false;
+                    }
+                } else {
+                    label.style.display = 'flex';
                 }
-
-                const dayNum = parseInt(dayValue);
-                const isUnavailable = scheduledDays.has(dayNum);
-                option.disabled = isUnavailable;
-                option.hidden = isUnavailable;
-                option.textContent = dayNames[dayNum] + (isUnavailable ? ' (Already scheduled)' : '');
             });
             
-            if (daySelect.value !== '' && daySelect.options[daySelect.selectedIndex].disabled) {
-                daySelect.value = '';
-            }
+            updateDayDropdownLabel();
         }
 
         function getScheduleDayIndex(schedule) {
@@ -290,7 +735,16 @@ let currentSectionId = null;
 
         async function filterAvailableInstructors(selectId = 'faculty_select') {
             const isEdit = selectId === 'edit_faculty_select';
-            const dayValue = document.getElementById(isEdit ? 'edit_day_select' : 'day_select')?.value;
+            // For non-edit mode (batch creation with checkboxes), get first selected day
+            let dayValue = null;
+            if (!isEdit) {
+                const selectedCheckboxes = document.querySelectorAll('input[name="day"]:checked');
+                if (selectedCheckboxes.length > 0) {
+                    dayValue = selectedCheckboxes[0].value;
+                }
+            } else {
+                dayValue = document.getElementById('edit_day_select')?.value;
+            }
             const startTime = document.getElementById(isEdit ? 'edit_start_time' : 'start_time')?.value;
             const endTime = document.getElementById(isEdit ? 'edit_end_time' : 'end_time')?.value;
             const facultySelect = document.getElementById(selectId);
@@ -586,6 +1040,8 @@ let currentSectionId = null;
             input.value = convertTo24Hour(hour, minute, period);
             if (wheel.dataset.target === 'start_time' || wheel.dataset.target === 'end_time') {
                 updateDurationDisplay();
+            } else if (wheel.dataset.target === 'edit_start_time' || wheel.dataset.target === 'edit_end_time') {
+                updateDurationDisplayEdit();
             }
         }
 
@@ -598,11 +1054,13 @@ let currentSectionId = null;
             
             if (!startTime || !endTime) {
                 document.getElementById('duration-display').style.display = 'none';
+                document.getElementById('course-warning').style.display = 'none';
                 return;
             }
             
             if (startTime >= endTime) {
                 document.getElementById('duration-display').style.display = 'none';
+                document.getElementById('course-warning').style.display = 'none';
                 return;
             }
             
@@ -626,6 +1084,53 @@ let currentSectionId = null;
             
             document.getElementById('duration-text').textContent = durationText;
             document.getElementById('duration-display').style.display = 'block';
+            
+            // Validate course-room match when time changes
+            validateCourseRoomMatch();
+        }
+
+        // Update duration display for EDIT modal
+        function updateDurationDisplayEdit() {
+            const startTime = document.getElementById('edit_start_time').value;
+            const endTime = document.getElementById('edit_end_time').value;
+            
+            if (!startTime || !endTime) {
+                document.getElementById('duration-display-edit').style.display = 'none';
+                const warningDiv = document.getElementById('edit_course-warning');
+                if (warningDiv) warningDiv.style.display = 'none';
+                return;
+            }
+            
+            if (startTime >= endTime) {
+                document.getElementById('duration-display-edit').style.display = 'none';
+                const warningDiv = document.getElementById('edit_course-warning');
+                if (warningDiv) warningDiv.style.display = 'none';
+                return;
+            }
+            
+            // Calculate duration
+            const [startHour, startMin] = startTime.split(':').map(Number);
+            const [endHour, endMin] = endTime.split(':').map(Number);
+            const durationMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin);
+            
+            let durationText = '';
+            if (durationMinutes < 60) {
+                durationText = `${durationMinutes} minutes`;
+            } else {
+                const hours = Math.floor(durationMinutes / 60);
+                const mins = durationMinutes % 60;
+                if (mins === 0) {
+                    durationText = `${hours} hour${hours > 1 ? 's' : ''}`;
+                } else {
+                    durationText = `${hours} hour${hours > 1 ? 's' : ''} ${mins} minutes`;
+                }
+            }
+            
+            document.getElementById('duration-text-edit').textContent = durationText;
+            document.getElementById('duration-display-edit').style.display = 'block';
+            
+            // Validate course-room match when time changes in edit modal
+            validateCourseRoomMatchEdit();
         }
 
         function submitCreateSchedule(event) {
@@ -636,53 +1141,200 @@ let currentSectionId = null;
                 return;
             }
             
-            // Check for duplicate course on same day
+            // Get all selected days from checkboxes
+            const dayCheckboxes = document.querySelectorAll('input[name="day"]:checked');
+            const selectedDays = Array.from(dayCheckboxes).map(cb => parseInt(cb.value));
+            
+            // Validate at least one day is selected
+            if (selectedDays.length === 0) {
+                showAlert('Please select at least one day.', 'error');
+                return;
+            }
+            
             const courseId = document.getElementById('course_select').value;
-            const dayValue = document.getElementById('day_select').value;
             const courseOption = document.getElementById('course_select').options[document.getElementById('course_select').selectedIndex];
             const courseCode = courseOption.textContent.split(' - ')[0]; // Extract course code
+            const courseSelect = document.getElementById('course_select');
+            const roomSelect = document.getElementById('room_select');
+            const sectionSelect = document.getElementById('section_select');
             
-            if (courseId && dayValue) {
-                const isDuplicate = currentSchedules.some(schedule => 
-                    schedule.course_id == courseId && schedule.day == dayValue
-                );
+            // DEBUG: Log selected days
+            console.log('DEBUG submitCreateSchedule: selectedDays =', selectedDays);
+            
+            // Validate all days before creating any schedules
+            for (const dayValue of selectedDays) {
+                // Check for duplicate course on same day
+                if (courseId && dayValue !== null && dayValue !== undefined) {
+                    const isDuplicate = currentSchedules.some(schedule => 
+                        schedule.course_id == courseId && schedule.day == dayValue
+                    );
+                    
+                    if (isDuplicate) {
+                        const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                        showAlert(`${courseCode} is already scheduled on ${dayNames[dayValue]}. A course cannot have multiple sessions on the same day.`, 'error');
+                        return;
+                    }
+                }
                 
-                if (isDuplicate) {
-                    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                    showAlert(`${courseCode} is already scheduled on ${dayNames[dayValue]}. A course cannot have multiple sessions on the same day.`, 'error');
-                    return;
+                // Check if schedule would exceed required hours
+                if (courseSelect.value && roomSelect.value && sectionSelect.value) {
+                    const selectedCourseOption = courseSelect.selectedOptions[0];
+                    const lectureHours = parseInt(selectedCourseOption.dataset.lectureHours) || 0;
+                    const labHours = parseInt(selectedCourseOption.dataset.laboratoryHours) || 0;
+                    
+                    const roomOption = roomSelect.selectedOptions[0];
+                    const roomType = roomOption.dataset.roomType;
+                    
+                    const sectionId = sectionSelect.value;
+                    const courseHours = getCourseHoursInSection(courseId, sectionId);
+                    
+                    const startTime = document.getElementById('start_time')?.value;
+                    const endTime = document.getElementById('end_time')?.value;
+                    
+                    if (startTime && endTime) {
+                        const duration = calculateDuration(startTime, endTime) / 60; // convert to hours
+                        
+                        // Check if this schedule would exceed requirements
+                        if (roomType === 'lecture') {
+                            const lecRemaining = lectureHours - courseHours.lecture;
+                            if (lectureHours > 0 && lecRemaining <= 0) {
+                                showAlert(`Cannot add schedule: ${courseCode} already has all required lecture hours (${lectureHours} hrs).`, 'error');
+                                return;
+                            }
+                            if (lectureHours > 0 && duration > lecRemaining) {
+                                showAlert(`Cannot add schedule: This would add ${duration}hrs of lecture, but only ${lecRemaining}hrs is remaining. ${courseCode} requires ${lectureHours}hrs total.`, 'error');
+                                return;
+                            }
+                        } else if (roomType === 'laboratory') {
+                            const labRemaining = labHours - courseHours.lab;
+                            if (labHours > 0 && labRemaining <= 0) {
+                                showAlert(`Cannot add schedule: ${courseCode} already has all required lab hours (${labHours} hrs).`, 'error');
+                                return;
+                            }
+                            if (labHours > 0 && duration > labRemaining) {
+                                showAlert(`Cannot add schedule: This would add ${duration}hrs of lab, but only ${labRemaining}hrs is remaining. ${courseCode} requires ${labHours}hrs total.`, 'error');
+                                return;
+                            }
+                        }
+                    }
                 }
             }
             
-            const formData = new FormData(event.target);
-
-            fetchWithCSRF('/admin/schedule/add/', {
-                method: 'POST',
-                body: formData
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    showAlert('Schedule created successfully!', 'success');
-                    closeModal('scheduleModal');
-                    if (currentSectionId) {
-                        setTimeout(() => {
-                            const sectionName = document.getElementById('scheduleSectionName').textContent;
-                            const curriculum = document.getElementById('scheduleCurriculum').textContent;
-                            loadScheduleView(currentSectionId, sectionName, curriculum);
-                        }, 500);
-                    } else {
-                        setTimeout(() => window.location.reload(), 800);
+            // All validations passed, now create schedules for each day
+            const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const results = { success: [], failed: [] };
+            
+            // Create a counter to track completion
+            let completedRequests = 0;
+            
+            for (const dayValue of selectedDays) {
+                const formData = new FormData();
+                
+                // Copy all form data except the day
+                const originalForm = event.target;
+                for (const [key, value] of new FormData(originalForm)) {
+                    if (key !== 'day') {
+                        formData.append(key, value);
                     }
-                } else {
-                    const err = data.errors ? data.errors.join(', ') : (data.error || 'Unknown error');
-                    showAlert('Error creating schedule: ' + err, 'error');
                 }
-            })
-            .catch(err => {
-                console.error('Create error:', err);
-                showAlert('Error creating schedule', 'error');
-            });
+                
+                // Add the specific day for this iteration
+                formData.append('day', dayValue);
+                
+                fetchWithCSRF('/admin/schedule/add/', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(res => res.json())
+                .then(data => {
+                    completedRequests++;
+                    
+                    if (data.success) {
+                        results.success.push(dayNames[dayValue]);
+                    } else {
+                        // Get detailed error message
+                        let errorMsg = 'Unknown error';
+                        if (data.error) {
+                            errorMsg = data.error;
+                        } else if (data.errors) {
+                            errorMsg = Array.isArray(data.errors) ? data.errors.join(', ') : data.errors;
+                        }
+                        
+                        console.error(`Create error for ${dayNames[dayValue]}:`, data);
+                        results.failed.push({
+                            day: dayNames[dayValue],
+                            error: errorMsg
+                        });
+                    }
+                    
+                    // Check if all requests completed
+                    if (completedRequests === selectedDays.length) {
+                        handleBatchScheduleResults(results, courseCode);
+                    }
+                })
+                .catch(err => {
+                    completedRequests++;
+                    console.error(`Create error for ${dayNames[dayValue]}:`, err);
+                    results.failed.push({
+                        day: dayNames[dayValue],
+                        error: err.message || 'Network error'
+                    });
+                    
+                    if (completedRequests === selectedDays.length) {
+                        handleBatchScheduleResults(results, courseCode);
+                    }
+                });
+            }
+        }
+        
+        // Handle batch schedule creation results
+        function handleBatchScheduleResults(results, courseCode) {
+            const successCount = results.success.length;
+            const failureCount = results.failed.length;
+            
+            console.log('DEBUG handleBatchScheduleResults: results =', results);
+            
+            if (successCount > 0 && failureCount === 0) {
+                // All succeeded
+                const daysText = results.success.join(', ');
+                showAlert(`Schedule created successfully for ${courseCode} on ${daysText}!`, 'success');
+                closeModal('scheduleModal');
+                
+                if (currentSectionId) {
+                    setTimeout(() => {
+                        const sectionName = document.getElementById('scheduleSectionName').textContent;
+                        const curriculum = document.getElementById('scheduleCurriculum').textContent;
+                        loadScheduleView(currentSectionId, sectionName, curriculum);
+                    }, 500);
+                } else {
+                    setTimeout(() => window.location.reload(), 800);
+                }
+            } else if (successCount > 0 && failureCount > 0) {
+                // Partial success
+                let message = `Schedule created for ${courseCode} on ${results.success.join(', ')}.\n\nFailed days:\n`;
+                results.failed.forEach(f => {
+                    message += `• ${f.day}: ${f.error}\n`;
+                });
+                showAlert(message, 'warning');
+                
+                // Reload after a delay to show partial success
+                if (currentSectionId) {
+                    setTimeout(() => {
+                        const sectionName = document.getElementById('scheduleSectionName').textContent;
+                        const curriculum = document.getElementById('scheduleCurriculum').textContent;
+                        loadScheduleView(currentSectionId, sectionName, curriculum);
+                    }, 500);
+                } else {
+                    setTimeout(() => window.location.reload(), 800);
+                }
+            } else {
+                // All failed
+                let message = `Failed to create schedule for ${courseCode}:\n`;
+                results.failed.forEach(f => {
+                    message += `• ${f.day}: ${f.error}\n`;
+                });
+                showAlert(message, 'error');
+            }
         }
 
         // Edit schedule functions
@@ -757,6 +1409,47 @@ let currentSectionId = null;
             if (endTimeEdit < '07:30' || endTimeEdit > '21:30') {
                 showAlert('End time must be between 7:30 AM and 9:30 PM', 'error');
                 return;
+            }
+            
+            // FIXED VALIDATION: Check if editing would exceed required hours
+            // Exclude the current schedule being edited from the calculation
+            const courseSelect = document.getElementById('edit_course_select');
+            const roomSelect = document.getElementById('edit_room_select');
+            const sectionSelect = document.getElementById('section_select');
+            
+            if (courseSelect.value && roomSelect.value && sectionSelect.value) {
+                const selectedCourseOption = courseSelect.selectedOptions[0];
+                const lectureHours = parseInt(selectedCourseOption.dataset.lectureHours) || 0;
+                const labHours = parseInt(selectedCourseOption.dataset.laboratoryHours) || 0;
+                const courseId = courseSelect.value;
+                
+                const roomOption = roomSelect.selectedOptions[0];
+                const roomType = roomOption.dataset.roomType;
+                
+                const sectionId = sectionSelect.value;
+                const newDuration = calculateDuration(startTimeEdit, endTimeEdit) / 60; // convert to hours
+                
+                // Get hours excluding THIS schedule being edited
+                const courseHoursExcluding = getCourseHoursInSectionExcluding(courseId, sectionId, currentEditScheduleId);
+                
+                // Check if this edit would exceed requirements
+                if (roomType === 'lecture') {
+                    const lecNewUsage = courseHoursExcluding.lecture + newDuration;
+                    
+                    if (lectureHours > 0 && lecNewUsage > lectureHours) {
+                        const courseCode = selectedCourseOption.textContent.split(' - ')[0];
+                        showAlert(`Cannot update: This would use ${lecNewUsage.toFixed(1)}hrs of lecture, but ${courseCode} requires only ${lectureHours}hrs total.`, 'error');
+                        return;
+                    }
+                } else if (roomType === 'laboratory') {
+                    const labNewUsage = courseHoursExcluding.lab + newDuration;
+                    
+                    if (labHours > 0 && labNewUsage > labHours) {
+                        const courseCode = selectedCourseOption.textContent.split(' - ')[0];
+                        showAlert(`Cannot update: This would use ${labNewUsage.toFixed(1)}hrs of lab, but ${courseCode} requires only ${labHours}hrs total.`, 'error');
+                        return;
+                    }
+                }
             }
             
             const formData = new FormData(event.target);
@@ -837,11 +1530,15 @@ let currentSectionId = null;
             const cardEl = document.querySelector(`.section-card[data-section-id="${sectionId}"]`);
             if (cardEl) cardEl.classList.add('selected');
             
+            console.log('DEBUG loadScheduleView:', { sectionId, sectionName });
+            
             fetch(`/admin/section/${sectionId}/schedule-data/`)
                 .then(res => res.json())
                 .then(data => {
+                    console.log('DEBUG API response:', data);
                     if (data.success) {
                         currentSchedules = data.schedules; // Store schedules for duplicate check
+                        console.log('  Stored currentSchedules:', currentSchedules);
                         renderScheduleGrid(data.schedules);
                         renderCoursesSidebar(data.courses);
                         filterAvailableInstructors('faculty_select');
@@ -1362,8 +2059,14 @@ let currentSectionId = null;
             document.getElementById(`${currentTimeField}_display`).textContent = display;
             if (currentTimeField.startsWith('edit_')) {
                 filterAvailableInstructors('edit_faculty_select');
+                // Update duration and validate when time changes in edit modal
+                updateDurationDisplayEdit();
             } else {
                 filterAvailableInstructors('faculty_select');
+                // Update duration and validate when time changes in create modal
+                updateDurationDisplay();
+                // Re-filter available days based on new time
+                filterAvailableDays();
             }
             closeTimePicker();
         }
