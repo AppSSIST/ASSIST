@@ -86,7 +86,7 @@ urlpatterns = [
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/auth/password-reset/', views.api_password_reset, name='api_password_reset'),
     path('api/auth/password-reset/confirm/', views.api_password_reset_confirm, name='api_password_reset_confirm'),
-    path('api/schedule/available-resources/', views.get_available_resources, name='get_available_resources'),
+    path('api/schedules/available-resources/', views.get_available_resources, name='get_available_resources'),
     path('api/user-faculty-data/', views.get_user_faculty_data, name='get_user_faculty_data'),
     path('api/user-profile-update/', views.api_user_profile_update, name='api_user_profile_update'),
 
@@ -120,5 +120,8 @@ urlpatterns = [
     path('api/schedule/section/<int:section_id>/pdf/', views.api_section_schedule_pdf, name='api_section_schedule_pdf'),
     path('api/schedule/room/<int:room_id>/html/', views.api_room_schedule_html, name='api_room_schedule_html'),
     path('api/schedule/room/<int:room_id>/pdf/', views.api_room_schedule_pdf, name='api_room_schedule_pdf'),
+    
+    # API endpoint for schedule operations
+    path('api/schedules/', views.api_schedules, name='api_schedules'),
 ]
 

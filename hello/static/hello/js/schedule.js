@@ -208,16 +208,23 @@ let currentSectionId = null;
             return aStart < bEnd && bStart < aEnd;
         }
 
-        function fetchFacultySchedule(facultyId) {
-            if (facultyScheduleCache[facultyId]) {
-                return Promise.resolve(facultyScheduleCache[facultyId]);
+        function fetchFacultySchedule(facultyId, excludeScheduleId = null) {
+            const cacheKey = excludeScheduleId ? `${facultyId}_exclude_${excludeScheduleId}` : facultyId;
+            if (facultyScheduleCache[cacheKey]) {
+                return Promise.resolve(facultyScheduleCache[cacheKey]);
             }
-            return fetch(`/admin/faculty/${facultyId}/schedule-data/`)
+            
+            let url = `/admin/faculty/${facultyId}/schedule-data/`;
+            if (excludeScheduleId) {
+                url += `?exclude_schedule_id=${excludeScheduleId}`;
+            }
+            
+            return fetch(url)
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
-                        facultyScheduleCache[facultyId] = data.schedules || [];
-                        return facultyScheduleCache[facultyId];
+                        facultyScheduleCache[cacheKey] = data.schedules || [];
+                        return facultyScheduleCache[cacheKey];
                     }
                     return [];
                 })
@@ -232,6 +239,9 @@ let currentSectionId = null;
             const facultySelect = document.getElementById(selectId);
             if (!facultySelect) return;
 
+            // Get the schedule ID being edited (if any)
+            const excludeScheduleId = isEdit ? document.getElementById('edit_schedule_id')?.value : null;
+
             const facultyIds = Array.from(facultySelect.querySelectorAll('option'))
                 .map(option => option.value)
                 .filter(value => value !== '');
@@ -240,7 +250,7 @@ let currentSectionId = null;
 
             if (dayValue && startTime && endTime) {
                 await Promise.all(facultyIds.map(async facultyId => {
-                    const schedules = await fetchFacultySchedule(facultyId);
+                    const schedules = await fetchFacultySchedule(facultyId, excludeScheduleId);
                     schedules.forEach(schedule => {
                         const scheduleDay = getScheduleDayIndex(schedule);
                         if (scheduleDay === null || String(scheduleDay) !== dayValue) return;

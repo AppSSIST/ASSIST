@@ -282,6 +282,20 @@ class Schedule(models.Model):
             # If parsing fails, let other validations handle it or surface later
             pass
 
+        # Check for section time conflicts (same section, same day, overlapping times)
+        section_conflicts = Schedule.objects.filter(
+            section=self.section,
+            day=self.day
+        ).exclude(pk=self.pk)
+
+        for conflict_schedule in section_conflicts:
+            if self._times_overlap(self.start_time, self.end_time, conflict_schedule.start_time, conflict_schedule.end_time):
+                raise ValidationError(
+                    f'Section {self.section.name} has a time conflict on '
+                    f'{dict(self.DAY_CHOICES)[self.day]} between {conflict_schedule.start_time} and {conflict_schedule.end_time} '
+                    f'({conflict_schedule.course.course_code})'
+                )
+
         # Check for faculty time conflicts (same faculty, same day, overlapping times)
         if self.faculty:
             faculty_conflicts = Schedule.objects.filter(

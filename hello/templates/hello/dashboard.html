@@ -803,52 +803,124 @@
 
         // Update available faculty and rooms when time fields change
         function updateAvailableResources() {
-            const day = document.querySelector('#createScheduleModal select[name="day"]').value;
-            const startTime = document.querySelector('#createScheduleModal input[name="start_time"]').value;
-            const endTime = document.querySelector('#createScheduleModal input[name="end_time"]').value;
-
-            if (!day || !startTime || !endTime) {
-                return; // Don't update if any field is empty
-            }
-
-            fetch(`/api/schedule/available-resources/?day=${day}&start_time=${startTime}&end_time=${endTime}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Update faculty dropdown
-                    const facultySelect = document.querySelector('#createScheduleModal select[name="faculty"]');
-                    const currentFacultyValue = facultySelect.value;
-                    
-                    facultySelect.innerHTML = '<option value="">Select an instructor...</option>';
-                    data.faculty.forEach(faculty => {
-                        const option = document.createElement('option');
-                        option.value = faculty.id;
-                        option.textContent = faculty.name;
-                        if (faculty.id == currentFacultyValue) {
-                            option.selected = true;
-                        }
-                        facultySelect.appendChild(option);
-                    });
-
-                    // Update room dropdown
-                    const roomSelect = document.querySelector('#createScheduleModal select[name="room"]');
-                    const currentRoomValue = roomSelect.value;
-                    
-                    roomSelect.innerHTML = '<option value="">Select a room...</option>';
-                    data.rooms.forEach(room => {
-                        const option = document.createElement('option');
-                        option.value = room.id;
-                        option.textContent = room.name;
-                        if (room.id == currentRoomValue) {
-                            option.selected = true;
-                        }
-                        roomSelect.appendChild(option);
-                    });
+            console.warn('*** updateAvailableResources CALLED ***');
+            try {
+                const modal = document.getElementById('createScheduleModal');
+                if (!modal) {
+                    console.error('Modal not found');
+                    return;
                 }
-            })
-            .catch(error => {
-                console.error('Error updating available resources:', error);
-            });
+                console.warn('Modal found');
+
+                const daySelect = modal.querySelector('select[name="day"]');
+                const startTimeInput = modal.querySelector('input[name="start_time"]');
+                const endTimeInput = modal.querySelector('input[name="end_time"]');
+
+                console.warn('Selectors found:', {
+                    daySelect: !!daySelect,
+                    startTimeInput: !!startTimeInput, 
+                    endTimeInput: !!endTimeInput
+                });
+
+                if (!daySelect || !startTimeInput || !endTimeInput) {
+                    console.error('Form elements not found!');
+                    return;
+                }
+
+                const day = daySelect.value ? daySelect.value.trim() : '';
+                const startTime = startTimeInput.value ? startTimeInput.value.trim() : '';
+                const endTime = endTimeInput.value ? endTimeInput.value.trim() : '';
+
+                console.warn('RAW VALUES from form:', {day, startTime, endTime});
+                console.warn('VALUES ARE EMPTY?', {day_empty: !day, startTime_empty: !startTime, endTime_empty: !endTime});
+
+                if (!day || !startTime || !endTime) {
+                    console.warn('*** RETURNING EARLY - EMPTY FIELDS - NOT MAKING API CALL ***');
+                    console.warn('Skipping - empty fields:', {day, startTime, endTime});
+                    return;
+                }
+
+                console.warn('All fields have values - proceeding with fetch');
+
+                // Use URLSearchParams for proper encoding
+                const params = new URLSearchParams({
+                    day: day,
+                    start_time: startTime,
+                    end_time: endTime
+                });
+                const paramsString = params.toString();
+                console.warn('URLSearchParams result:', paramsString);
+                console.warn('URLSearchParams type:', typeof paramsString);
+                console.warn('URLSearchParams empty?', !paramsString || paramsString === '');
+                
+                // Fallback manual URL building if URLSearchParams fails
+                let url;
+                if (paramsString && paramsString.length > 0) {
+                    url = `/api/schedule/available-resources/?${paramsString}`;
+                } else {
+                    console.warn('URLSearchParams returned empty - using manual URL building');
+                    url = `/api/schedule/available-resources/?day=${encodeURIComponent(day)}&start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}`;
+                }
+                console.warn('FINAL URL:', url);
+                console.log('Fetching:', url);
+
+                console.warn('*** ABOUT TO CALL FETCH ***');
+                fetch(url)
+                .then(response => {
+                    console.log('Response status:', response.status);
+                    if (!response.ok) {
+                        return response.json().then(data => {
+                            console.error('Error response:', data);
+                            throw new Error(`HTTP ${response.status}: ${data.error || 'Unknown error'}`);
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Success response:', data);
+                    if (data.error) {
+                        console.error('API returned error:', data.error, data.debug);
+                        return;
+                    }
+                    if (data.success) {
+                        const facultySelect = modal.querySelector('select[name="faculty"]');
+                        const roomSelect = modal.querySelector('select[name="room"]');
+                        
+                        if (facultySelect && data.faculty) {
+                            const currentFacultyValue = facultySelect.value;
+                            facultySelect.innerHTML = '<option value="">Select an instructor...</option>';
+                            data.faculty.forEach(faculty => {
+                                const option = document.createElement('option');
+                                option.value = faculty.id;
+                                option.textContent = faculty.name;
+                                if (faculty.id == currentFacultyValue) {
+                                    option.selected = true;
+                                }
+                                facultySelect.appendChild(option);
+                            });
+                        }
+                        
+                        if (roomSelect && data.rooms) {
+                            const currentRoomValue = roomSelect.value;
+                            roomSelect.innerHTML = '<option value="">Select a room...</option>';
+                            data.rooms.forEach(room => {
+                                const option = document.createElement('option');
+                                option.value = room.id;
+                                option.textContent = room.name;
+                                if (room.id == currentRoomValue) {
+                                    option.selected = true;
+                                }
+                                roomSelect.appendChild(option);
+                            });
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Fetch error:', error);
+                });
+            } catch (e) {
+                console.error('Exception in updateAvailableResources:', e);
+            }
         }
 
         // Add event listeners to time fields
@@ -863,6 +935,34 @@
                 if (startTimeInput) startTimeInput.addEventListener('change', updateAvailableResources);
                 if (endTimeInput) endTimeInput.addEventListener('change', updateAvailableResources);
             }
+            
+            // Diagnostic helper for console
+            window.debugScheduleForm = function() {
+                const modal = document.getElementById('createScheduleModal');
+                if (!modal) {
+                    console.log('Modal not found');
+                    return;
+                }
+                const daySelect = modal.querySelector('select[name="day"]');
+                const startTimeInput = modal.querySelector('input[name="start_time"]');
+                const endTimeInput = modal.querySelector('input[name="end_time"]');
+                console.log('Form field values:', {
+                    day: daySelect ? daySelect.value : 'NOT FOUND',
+                    startTime: startTimeInput ? startTimeInput.value : 'NOT FOUND',
+                    endTime: endTimeInput ? endTimeInput.value : 'NOT FOUND'
+                });
+                
+                // Test the fetch manually
+                if (daySelect && startTimeInput && endTimeInput) {
+                    const params = new URLSearchParams({
+                        day: daySelect.value,
+                        start_time: startTimeInput.value,
+                        end_time: endTimeInput.value
+                    });
+                    const url = `/api/schedule/available-resources/?${params.toString()}`;
+                    console.log('Would fetch:', url);
+                }
+            };
         });
 
         function showNotification(message, type) {

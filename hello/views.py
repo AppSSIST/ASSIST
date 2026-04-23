@@ -34,10 +34,6 @@ def is_admin(user):
 
 # Custom JWT Serializer with user data
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    def get_token(self, user):
-        token = super().get_token(user)
-        return token
-    
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
@@ -772,14 +768,28 @@ def delete_faculty(request, faculty_id):
 
 @login_required(login_url='admin_login')
 def get_faculty_schedule(request, faculty_id):
-    """Get schedule data for a specific faculty member"""
+    """Get schedule data for a specific faculty member
+    
+    Query params:
+    - exclude_schedule_id: Optional schedule ID to exclude from results (for edit mode)
+    """
     try:
         faculty = get_object_or_404(Faculty, id=faculty_id)
+        
+        # Get exclude_schedule_id from query params to support editing
+        exclude_schedule_id = request.GET.get('exclude_schedule_id')
         
         # Get all schedules for this faculty
         schedules = Schedule.objects.filter(faculty=faculty).select_related(
             'course', 'section', 'room'
         ).order_by('day', 'start_time')
+        
+        # Exclude the schedule being edited if provided
+        if exclude_schedule_id:
+            try:
+                schedules = schedules.exclude(id=int(exclude_schedule_id))
+            except (ValueError, TypeError):
+                pass  # Invalid ID format, just ignore
         
         # Format schedule data
         schedule_data = []
@@ -4067,22 +4077,43 @@ def api_password_reset_confirm(request):
 @permission_classes([AllowAny])
 def get_available_resources(request):
     """API endpoint to get available faculty and rooms for a given time slot"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
-        # Get data from request.query_params (standard for GET in DRF)
-        day = request.query_params.get('day')
-        start_time = request.query_params.get('start_time')
-        end_time = request.query_params.get('end_time')
+        # Log the raw request
+        logger.warning(f"Raw request path: {request.path}")
+        logger.warning(f"Raw query string: {request.META.get('QUERY_STRING', 'NONE')}")
+        logger.warning(f"request.GET: {dict(request.GET)}")
+        logger.warning(f"request.query_params: {dict(request.query_params)}")
+        
+        # Get data from request - try both query_params and GET
+        day = request.query_params.get('day') or request.GET.get('day')
+        start_time = request.query_params.get('start_time') or request.GET.get('start_time')
+        end_time = request.query_params.get('end_time') or request.GET.get('end_time')
+        
+        # Clean up whitespace
+        day = day.strip() if day else None
+        start_time = start_time.strip() if start_time else None
+        end_time = end_time.strip() if end_time else None
+
+        logger.warning(f"Parsed parameters: day={day}, start_time={start_time}, end_time={end_time}")
 
         if not all([day, start_time, end_time]):
-            return Response({'error': 'day, start_time, and end_time are required'}, status=status.HTTP_400_BAD_REQUEST)
+            error_msg = f"Missing required parameters: day={day}, start_time={start_time}, end_time={end_time}"
+            logger.error(error_msg)
+            return Response({'error': 'day, start_time, and end_time are required', 'debug': error_msg}, status=status.HTTP_400_BAD_REQUEST)
 
         # Convert day name to integer if needed
         day_mapping = {'Monday': 0, 'Tuesday': 1, 'Wednesday': 2, 'Thursday': 3, 'Friday': 4, 'Saturday': 5}
         
         try:
-            day_val = day_mapping[day] if day in day_mapping else int(day)
-        except (ValueError, TypeError):
-            return Response({'error': 'Invalid day format'}, status=status.HTTP_400_BAD_REQUEST)
+            day_val = day_mapping.get(day, int(day)) if not day.isdigit() else int(day)
+            logger.debug(f"Day converted: {day} -> {day_val}")
+        except (ValueError, TypeError, AttributeError) as e:
+            error_msg = f"Invalid day format: {day} - {str(e)}"
+            logger.error(error_msg)
+            return Response({'error': 'Invalid day format', 'debug': error_msg}, status=status.HTTP_400_BAD_REQUEST)
 
         # Filter logic
         all_faculty = Faculty.objects.all().order_by('last_name', 'first_name')
@@ -4811,16 +4842,153 @@ def api_faculty_schedule(request, faculty_id):
             })
         
         return Response({
+            'faculty_id': faculty.id,
             'schedules': schedule_data,
             'specializations': specializations,
             'total_units': faculty.total_units
         }, status=status.HTTP_200_OK)
         
-    except Http404:
-        return Response({'error': 'Faculty not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Faculty.DoesNotExist:
+        return Response({
+            'faculty_id': None,
+            'schedules': [],
+            'specializations': [],
+            'total_units': 0
+        }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def api_schedules(request):
+    """API endpoint for schedule operations"""
+    if request.method == 'POST':
+        """Create a new schedule via API"""
+        try:
+            # Extract schedule data from request body
+            data = request.data
+            course_id = data.get('course_id') or data.get('course')
+            section_id = data.get('section_id') or data.get('section')
+            faculty_id = data.get('faculty_id') or data.get('faculty')
+            room_id = data.get('room_id') or data.get('room')
+            day = data.get('day')
+            start_time = data.get('start_time')
+            end_time = data.get('end_time')
+
+            # Validate required fields
+            if not all([course_id, section_id, day, start_time, end_time]):
+                return Response({
+                    'success': False,
+                    'error': 'Missing required fields: course_id, section_id, day, start_time, end_time'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get related objects
+            try:
+                course = Course.objects.get(id=course_id)
+                section = Section.objects.get(id=section_id)
+                faculty = Faculty.objects.get(id=faculty_id) if faculty_id else None
+                room = Room.objects.get(id=room_id) if room_id else None
+            except Course.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'error': f'Course with ID {course_id} not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+            except Section.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'error': f'Section with ID {section_id} not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+            except Faculty.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'error': f'Faculty with ID {faculty_id} not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+            except Room.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'error': f'Room with ID {room_id} not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Validate time window (07:30 - 21:30)
+            try:
+                def _tmin(tstr):
+                    h, m = map(int, tstr.split(':'))
+                    return h * 60 + m
+
+                min_allowed = 7 * 60 + 30
+                max_allowed = 21 * 60 + 30
+                if start_time and end_time:
+                    smin = _tmin(start_time)
+                    emin = _tmin(end_time)
+                    if smin < min_allowed or emin > max_allowed:
+                        return Response({
+                            'success': False,
+                            'error': f'Schedule times must be within 07:30 and 21:30. Received {start_time} - {end_time}'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+            except Exception:
+                # Fall back to model validation for parsing errors
+                pass
+
+            # Create new schedule
+            schedule = Schedule(
+                course=course,
+                section=section,
+                faculty=faculty,
+                room=room,
+                day=int(day),
+                start_time=start_time,
+                end_time=end_time
+            )
+
+            # Validate and save
+            schedule.full_clean()
+            schedule.save()
+
+            # Log activity
+            log_activity(
+                user=request.user,
+                action='add',
+                entity_type='schedule',
+                entity_name=f"{course.course_code} - {section.name}",
+                message=f'Created schedule: {course.course_code} for {section.name} on {dict(Schedule.DAY_CHOICES)[int(day)]}'
+            )
+
+            return Response({
+                'success': True,
+                'message': 'Schedule created successfully',
+                'schedule_id': schedule.id
+            }, status=status.HTTP_201_CREATED)
+
+        except ValidationError as e:
+            # Handle validation errors from model clean()
+            error_messages = []
+            if hasattr(e, 'error_dict'):
+                for field, errors in e.error_dict.items():
+                    for error in errors:
+                        error_messages.append(error.message)
+            elif hasattr(e, 'error_list'):
+                for error in e.error_list:
+                    error_messages.append(str(error.message))
+            else:
+                error_messages = [str(e)]
+            
+            return Response({
+                'success': False,
+                'error': ' '.join(error_messages) if error_messages else str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    else:
+        # GET method - return empty list or filtered schedules if needed
+        return Response({
+            'schedules': []
+        }, status=status.HTTP_200_OK)
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
