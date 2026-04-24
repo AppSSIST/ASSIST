@@ -228,7 +228,8 @@ let currentSectionId = null;
                 
                 console.log(`    isComplete = (${lectureHours}===0 || ${courseHours.lecture}>=${lectureHours}) && (${labHours}===0 || ${courseHours.lab}>=${labHours}) = ${isComplete}`);
                 
-                if (isComplete && lectureHours > 0 && labHours > 0) {
+                // FIX: Hide if complete AND has any hours to schedule (lecture OR lab)
+                if (isComplete && (lectureHours > 0 || labHours > 0)) {
                     console.log(`    HIDING: course complete`);
                     option.disabled = true;
                     option.hidden = true;
@@ -257,16 +258,39 @@ let currentSectionId = null;
             let lectureHours = 0;
             let labHours = 0;
             
+            console.log('DEBUG getCourseHoursInSectionExcluding:', { 
+                courseId, 
+                sectionId, 
+                excludeScheduleId, 
+                currentSchedules: currentSchedules.length + ' schedules',
+                currentEditScheduleId
+            });
+            
             currentSchedules.forEach(schedule => {
+                console.log(`  Checking schedule ${schedule.id}:`, {
+                    id: schedule.id,
+                    excludeScheduleId: excludeScheduleId,
+                    isExcluded: String(schedule.id) === String(excludeScheduleId),
+                    course_id: schedule.course_id,
+                    courseId: courseId,
+                    matches_course: schedule.course_id == courseId,
+                    section_id: schedule.section_id,
+                    sectionId: sectionId,
+                    matches_section: schedule.section_id == sectionId
+                });
+                
                 // Skip the schedule we're excluding (editing)
                 // Handle both string and number IDs
                 if (String(schedule.id) === String(excludeScheduleId)) {
+                    console.log(`    -> SKIPPED (excluded)`);
                     return;
                 }
                 
                 if (schedule.course_id == courseId && schedule.section_id == sectionId) {
                     const duration = schedule.duration || 0;
                     const durationHours = duration / 60;
+                    
+                    console.log(`    -> COUNTED: room_type=${schedule.room_type}, duration=${duration}min = ${durationHours}hrs`);
                     
                     if (schedule.room_type === 'lecture') {
                         lectureHours += durationHours;
@@ -280,6 +304,7 @@ let currentSectionId = null;
                 }
             });
             
+            console.log('  RESULT:', { lecture: lectureHours, lab: labHours });
             return { lecture: lectureHours, lab: labHours };
         }
 
@@ -330,11 +355,14 @@ let currentSectionId = null;
 
         // Show course requirements
         function showCourseRequirements(mode = '') {
+            console.log('DEBUG showCourseRequirements called:', { mode, currentEditScheduleId });
+            
             const courseSelectId = mode === 'edit' ? 'edit_course_select' : 'course_select';
             const courseSelect = document.getElementById(courseSelectId);
             const infoPrefix = mode === 'edit' ? 'edit_' : '';
             
             if (!courseSelect || !courseSelect.value) {
+                console.log('  No course selected, hiding info');
                 document.getElementById(infoPrefix + 'course-requirements-info').style.display = 'none';
                 document.getElementById(infoPrefix + 'course-warning').style.display = 'none';
                 return;
@@ -344,7 +372,14 @@ let currentSectionId = null;
             const lectureHours = parseInt(selectedOption.dataset.lectureHours) || 0;
             const labHours = parseInt(selectedOption.dataset.laboratoryHours) || 0;
             
+            console.log('  Course selected:', { 
+                courseId: courseSelect.value, 
+                lectureHours, 
+                labHours 
+            });
+            
             if (lectureHours === 0 && labHours === 0) {
+                console.log('  No lecture or lab hours required, hiding info');
                 document.getElementById(infoPrefix + 'course-requirements-info').style.display = 'none';
                 return;
             }
@@ -360,15 +395,17 @@ let currentSectionId = null;
             
             const courseId = courseSelect.value;
             
+            console.log('  Section ID:', sectionId);
+            
             if (!sectionId) {
+                console.log('  No section ID, hiding info');
                 document.getElementById(infoPrefix + 'course-requirements-info').style.display = 'none';
                 return;
             }
             
-            // Use the excluding function if in edit mode
-            const courseHours = mode === 'edit' 
-                ? getCourseHoursInSectionExcluding(courseId, sectionId, currentEditScheduleId)
-                : getCourseHoursInSection(courseId, sectionId);
+            // Get course hours - ALWAYS include the current schedule so user can see
+            // how much the current schedule contributes to the total hours
+            const courseHours = getCourseHoursInSection(courseId, sectionId);
             
             const lecRemaining = Math.max(0, lectureHours - courseHours.lecture);
             const labRemaining = Math.max(0, labHours - courseHours.lab);
@@ -1461,10 +1498,13 @@ let currentSectionId = null;
 
         function openEditScheduleModal(scheduleId) {
             currentEditScheduleId = scheduleId;
+            console.log('DEBUG openEditScheduleModal called with scheduleId:', scheduleId);
             
             fetch(`/admin/schedule/edit/${scheduleId}/`)
                 .then(res => res.json())
                 .then(data => {
+                    console.log('DEBUG openEditScheduleModal: Fetched schedule data:', data);
+                    
                     document.getElementById('edit_schedule_id').value = data.id;
                     document.getElementById('edit_section_id').value = data.section;
                     document.getElementById('edit_section_display').value = document.querySelector(`option[value="${data.section}"]`)?.textContent || '';
@@ -1475,16 +1515,29 @@ let currentSectionId = null;
                         .then(sectionData => {
                             if (sectionData.success) {
                                 currentSchedules = sectionData.schedules;
-                                console.log('DEBUG openEditScheduleModal: Loaded currentSchedules:', currentSchedules);
+                                console.log('DEBUG openEditScheduleModal: Loaded currentSchedules:', currentSchedules.length, 'schedules');
+                                currentSchedules.forEach(s => {
+                                    console.log('  - Schedule:', s.id, s.course_id, s.day, s.room_type, s.duration + 'min');
+                                });
                             }
                             return data; // Return original schedule data to continue processing
                         });
                 })
                 .then(data => {
+                    console.log('DEBUG openEditScheduleModal: Setting form values with data:', { 
+                        course: data.course,
+                        faculty: data.faculty,
+                        room: data.room,
+                        day: data.day,
+                        start_time: data.start_time,
+                        end_time: data.end_time
+                    });
+                    
                     // Now populate the form with schedule data
                     // Set course and trigger change handlers to update dependent fields
                     const courseSelect = document.getElementById('edit_course_select');
                     courseSelect.value = data.course;
+                    console.log('  Course select value after setting:', courseSelect.value);
                     
                     document.getElementById('edit_faculty_select').value = data.faculty;
                     
@@ -1724,6 +1777,7 @@ let currentSectionId = null;
                         renderScheduleGrid(data.schedules);
                         renderCoursesSidebar(data.courses);
                         filterAvailableInstructors('faculty_select');
+                        filterCourses('course_select'); // FIX: Re-filter courses after loading
                     } else {
                         console.error('Error loading schedule:', data.error);
                         showAlert('Error loading schedule data', 'error');
