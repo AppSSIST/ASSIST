@@ -448,7 +448,7 @@
                 </div>
                 <div class="form-group">
                     <label>Room</label>
-                    <select name="room" id="edit_room_select" onchange="validateCourseRoomMatchEdit()">
+                    <select name="room" id="edit_room_select" onchange="filterAvailableDays(); validateCourseRoomMatchEdit()">
                         <option value="">Select a room...</option>
                         {% for room in room_list %}
                         <option value="{{ room.id }}" data-room-type="{{ room.room_type }}">{{ room.get_room_type_display }}: {% if room.campus == 'arlegui' %}A{% else %}C{% endif %}-{{ room.room_number }}</option>

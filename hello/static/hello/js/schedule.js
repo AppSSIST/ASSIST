@@ -349,8 +349,15 @@ let currentSectionId = null;
                 return;
             }
             
-            const sectionSelect = document.getElementById('section_select');
-            const sectionId = sectionSelect ? sectionSelect.value : null;
+            // FIX: In edit mode, get sectionId from edit_section_id (hidden field), not section_select
+            let sectionId = null;
+            if (mode === 'edit') {
+                sectionId = document.getElementById('edit_section_id').value;
+            } else {
+                const sectionSelect = document.getElementById('section_select');
+                sectionId = sectionSelect ? sectionSelect.value : null;
+            }
+            
             const courseId = courseSelect.value;
             
             if (!sectionId) {
@@ -653,7 +660,9 @@ let currentSectionId = null;
             console.log('  currentScheduleDay:', currentScheduleDay);
             
             // Check for conflicts
-            if (courseId && roomId && startTime && endTime) {
+            // FIX: Check for same course REGARDLESS of room selection
+            // Only check room conflicts if room is selected
+            if (courseId) {
                 const selectedCourseOption = isEditMode 
                     ? document.getElementById('edit_course_select').selectedOptions[0]
                     : document.getElementById('course_select').selectedOptions[0];
@@ -669,16 +678,16 @@ let currentSectionId = null;
                     
                     console.log(`  Checking schedule ${idx}:`, schedule);
                     
-                    // Check 1: Duplicate course on same day
+                    // Check 1: Duplicate course on same day (ALWAYS CHECK)
                     const scheduleCourseId = schedule.course_id ?? schedule.course?.id ?? schedule.course;
                     const sameCourse = scheduleCourseId != null
                         ? scheduleCourseId == courseId
                         : schedule.course_code && schedule.course_code === selectedCourseCode;
                     
-                    // Check 2: Time conflict in same room
+                    // Check 2: Time conflict in same room (ONLY IF ROOM SELECTED)
                     const scheduleRoomId = schedule.room_id ?? schedule.room?.id ?? schedule.room;
-                    const sameRoom = scheduleRoomId == roomId;
-                    const timeConflict = startTime && endTime && schedule.start_time && schedule.end_time 
+                    const sameRoom = roomId && scheduleRoomId == roomId;
+                    const timeConflict = roomId && startTime && endTime && schedule.start_time && schedule.end_time 
                         ? timesOverlap(startTime, endTime, schedule.start_time, schedule.end_time)
                         : false;
                     
@@ -695,7 +704,7 @@ let currentSectionId = null;
                     if (!Number.isNaN(dayIndex) && dayIndex >= 0) {
                         // Mark day as unavailable if:
                         // 1. Same course already scheduled, OR
-                        // 2. Same room has a time conflict
+                        // 2. Same room has a time conflict (if room is specified)
                         if (sameCourse) {
                             console.log(`      -> UNAVAILABLE: Same course ${selectedCourseCode} already on ${dayNames[dayIndex]}`);
                             unavailableDays.add(dayIndex);
@@ -1459,18 +1468,41 @@ let currentSectionId = null;
                     document.getElementById('edit_schedule_id').value = data.id;
                     document.getElementById('edit_section_id').value = data.section;
                     document.getElementById('edit_section_display').value = document.querySelector(`option[value="${data.section}"]`)?.textContent || '';
-                    document.getElementById('edit_course_select').value = data.course;
+                    
+                    // IMPORTANT: Fetch all schedules for this section to populate currentSchedules BEFORE filtering
+                    return fetch(`/admin/section/${data.section}/schedule-data/`)
+                        .then(res => res.json())
+                        .then(sectionData => {
+                            if (sectionData.success) {
+                                currentSchedules = sectionData.schedules;
+                                console.log('DEBUG openEditScheduleModal: Loaded currentSchedules:', currentSchedules);
+                            }
+                            return data; // Return original schedule data to continue processing
+                        });
+                })
+                .then(data => {
+                    // Now populate the form with schedule data
+                    // Set course and trigger change handlers to update dependent fields
+                    const courseSelect = document.getElementById('edit_course_select');
+                    courseSelect.value = data.course;
+                    
                     document.getElementById('edit_faculty_select').value = data.faculty;
-                    document.getElementById('edit_room_select').value = data.room;
+                    
+                    const roomSelect = document.getElementById('edit_room_select');
+                    roomSelect.value = data.room;
+                    
                     document.getElementById('edit_day_select').value = data.day;
                     
                     document.getElementById('edit_start_time').value = data.start_time;
                     document.getElementById('edit_end_time').value = data.end_time;
                     setTimeDisplay('edit_start_time');
                     setTimeDisplay('edit_end_time');
+                    
+                    // Trigger filtering and validation AFTER all values are set AND currentSchedules is populated
                     filterAvailableInstructors('edit_faculty_select');
                     filterAvailableDays(); // Filter days based on course and room constraints
                     showCourseRequirements('edit'); // Show course requirements info
+                    validateCourseRoomMatchEdit(); // Validate course-room match
                     
                     // Show the delete button for existing schedules
                     const deleteBtn = document.querySelector('.btn-delete');
@@ -2211,6 +2243,8 @@ let currentSectionId = null;
                 filterAvailableInstructors('edit_faculty_select');
                 // Update duration and validate when time changes in edit modal
                 updateDurationDisplayEdit();
+                // Re-filter available days based on new time in edit mode
+                filterAvailableDays();
             } else {
                 filterAvailableInstructors('faculty_select');
                 // Update duration and validate when time changes in create modal
