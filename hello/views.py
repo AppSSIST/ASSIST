@@ -5008,8 +5008,8 @@ def api_schedules(request):
             start_time = data.get('start_time')
             end_time = data.get('end_time')
 
-            # Validate required fields
-            if not all([course_id, section_id, day, start_time, end_time]):
+            # Validate required fields (note: day can be 0 for Monday, so check explicitly for None)
+            if course_id is None or section_id is None or day is None or not start_time or not end_time:
                 return Response({
                     'success': False,
                     'error': 'Missing required fields: course_id, section_id, day, start_time, end_time'
@@ -5382,5 +5382,463 @@ def api_room_schedule_pdf(request, room_id):
         return response
     except Http404:
         return Response({'error': 'Room not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ===== MOBILE CRUD API ENDPOINTS =====
+
+@api_view(['PUT', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def api_edit_delete_faculty(request, faculty_id):
+    """Edit or delete a faculty member (mobile API)"""
+    try:
+        faculty = get_object_or_404(Faculty, id=faculty_id)
+        
+        if request.method == 'PUT':
+            # Update faculty
+            first_name = request.data.get('first_name', faculty.first_name)
+            middle_name = request.data.get('middle_name', faculty.middle_name or '')
+            last_name = request.data.get('last_name', faculty.last_name)
+            email = request.data.get('email', faculty.email)
+            gender = request.data.get('gender', faculty.gender)
+            professional_title = request.data.get('professional_title', faculty.professional_title or '')
+            employment_status = request.data.get('employment_status', faculty.employment_status)
+            highest_degree = request.data.get('highest_degree', faculty.highest_degree or '')
+            prc_licensed = request.data.get('prc_licensed', faculty.prc_licensed)
+            specialization = request.data.get('specialization', faculty.specialization or '')
+            
+            # Validate email
+            if '@' not in email or '.' not in email.split('@')[1]:
+                return Response({
+                    'success': False,
+                    'error': 'Invalid email address format'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if email is taken by another faculty
+            if Faculty.objects.filter(email=email).exclude(id=faculty_id).exists():
+                return Response({
+                    'success': False,
+                    'error': 'Email already registered to another faculty member'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Update faculty record
+            faculty.first_name = first_name
+            faculty.middle_name = middle_name
+            faculty.last_name = last_name
+            faculty.email = email
+            faculty.gender = gender
+            faculty.professional_title = professional_title
+            faculty.employment_status = employment_status
+            faculty.highest_degree = highest_degree
+            faculty.prc_licensed = prc_licensed
+            faculty.specialization = specialization
+            faculty.save()
+            
+            # Update linked user if exists
+            if faculty.user:
+                faculty.user.email = email
+                faculty.user.first_name = first_name
+                faculty.user.last_name = last_name
+                faculty.user.save()
+            
+            # Log activity
+            log_activity(
+                user=request.user,
+                action='edit',
+                entity_type='faculty',
+                entity_name=f"{faculty.first_name} {faculty.last_name}",
+                message=f'Edited faculty via API: {faculty.first_name} {faculty.last_name}'
+            )
+            
+            return Response({
+                'success': True,
+                'message': 'Faculty updated successfully',
+                'faculty_id': faculty.id
+            }, status=status.HTTP_200_OK)
+        
+        elif request.method == 'DELETE':
+            # Delete faculty
+            faculty_name = f"{faculty.first_name} {faculty.last_name}"
+            faculty_email = faculty.email
+            
+            # Unassign from schedules (preserve schedule records)
+            Schedule.objects.filter(faculty=faculty).update(faculty=None)
+            
+            # Delete faculty record
+            faculty.delete()
+            
+            # Clean up user accounts with same email
+            try:
+                User.objects.filter(email__iexact=faculty_email.strip().lower()).delete()
+            except Exception:
+                pass
+            
+            # Log activity
+            log_activity(
+                user=request.user,
+                action='delete',
+                entity_type='faculty',
+                entity_name=faculty_name,
+                message=f'Deleted faculty via API: {faculty_name}'
+            )
+            
+            return Response({
+                'success': True,
+                'message': 'Faculty deleted successfully'
+            }, status=status.HTTP_204_NO_CONTENT)
+    
+    except Http404:
+        return Response({'error': 'Faculty not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['PUT', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def api_edit_delete_course(request, course_id):
+    """Edit or delete a course (mobile API)"""
+    try:
+        course = get_object_or_404(Course, id=course_id)
+        
+        if request.method == 'PUT':
+            # Update course
+            curriculum_id = request.data.get('curriculum_id', course.curriculum.id)
+            course_code = request.data.get('course_code', course.course_code).strip().upper()
+            descriptive_title = request.data.get('descriptive_title', course.descriptive_title).strip()
+            laboratory_hours = int(request.data.get('laboratory_hours', course.laboratory_hours))
+            lecture_hours = int(request.data.get('lecture_hours', course.lecture_hours))
+            credit_units = int(request.data.get('credit_units', course.credit_units))
+            year_level = int(request.data.get('year_level', course.year_level))
+            semester = int(request.data.get('semester', course.semester))
+            
+            # Get curriculum
+            try:
+                curriculum = Curriculum.objects.get(id=curriculum_id)
+            except Curriculum.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'error': 'Curriculum not found'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if course code already exists
+            if Course.objects.filter(course_code=course_code, curriculum=curriculum).exclude(id=course_id).exists():
+                return Response({
+                    'success': False,
+                    'error': 'Course code already exists in this curriculum'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Update course
+            course.curriculum = curriculum
+            course.course_code = course_code
+            course.descriptive_title = descriptive_title
+            course.laboratory_hours = laboratory_hours
+            course.lecture_hours = lecture_hours
+            course.credit_units = credit_units
+            course.year_level = year_level
+            course.semester = semester
+            course.save()
+            
+            # Log activity
+            log_activity(
+                user=request.user,
+                action='edit',
+                entity_type='course',
+                entity_name=f"{course.course_code} - {course.descriptive_title}",
+                message=f'Edited course via API: {course.course_code}'
+            )
+            
+            return Response({
+                'success': True,
+                'message': 'Course updated successfully',
+                'course_id': course.id
+            }, status=status.HTTP_200_OK)
+        
+        elif request.method == 'DELETE':
+            # Check if course has schedules
+            if course.schedules.exists():
+                return Response({
+                    'success': False,
+                    'error': 'Cannot delete course with existing schedules'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            course_name = f"{course.course_code} - {course.descriptive_title}"
+            course.delete()
+            
+            # Log activity
+            log_activity(
+                user=request.user,
+                action='delete',
+                entity_type='course',
+                entity_name=course_name,
+                message=f'Deleted course via API: {course_name}'
+            )
+            
+            return Response({
+                'success': True,
+                'message': 'Course deleted successfully'
+            }, status=status.HTTP_204_NO_CONTENT)
+    
+    except Http404:
+        return Response({'error': 'Course not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['PUT', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def api_edit_delete_room(request, room_id):
+    """Edit or delete a room (mobile API)"""
+    try:
+        room = get_object_or_404(Room, id=room_id)
+        
+        if request.method == 'PUT':
+            # Update room
+            name = request.data.get('name', room.name)
+            room_number = request.data.get('room_number', room.room_number or '')
+            capacity = int(request.data.get('capacity', room.capacity))
+            campus = request.data.get('campus', room.campus)
+            room_type = request.data.get('room_type', room.room_type)
+            
+            # Update room
+            room.name = name
+            room.room_number = room_number
+            room.capacity = capacity
+            room.campus = campus
+            room.room_type = room_type
+            room.save()
+            
+            # Log activity
+            log_activity(
+                user=request.user,
+                action='edit',
+                entity_type='room',
+                entity_name=room.name,
+                message=f'Edited room via API: {room.name}'
+            )
+            
+            return Response({
+                'success': True,
+                'message': 'Room updated successfully',
+                'room_id': room.id
+            }, status=status.HTTP_200_OK)
+        
+        elif request.method == 'DELETE':
+            room_name = room.name
+            room.delete()
+            
+            # Log activity
+            log_activity(
+                user=request.user,
+                action='delete',
+                entity_type='room',
+                entity_name=room_name,
+                message=f'Deleted room via API: {room_name}'
+            )
+            
+            return Response({
+                'success': True,
+                'message': 'Room deleted successfully'
+            }, status=status.HTTP_204_NO_CONTENT)
+    
+    except Http404:
+        return Response({'error': 'Room not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['PUT', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def api_edit_delete_section(request, section_id):
+    """Edit or delete a section (mobile API)"""
+    try:
+        section = get_object_or_404(Section, id=section_id)
+        
+        if request.method == 'PUT':
+            # Update section
+            name = request.data.get('name', section.name)
+            year_level = int(request.data.get('year_level', section.year_level))
+            semester = int(request.data.get('semester', section.semester))
+            max_students = int(request.data.get('max_students', section.max_students))
+            status_choice = request.data.get('status', section.status)
+            
+            # Validate section name format
+            pattern = r'^([A-Z]+)(\d)(\d)S(\d+)$'
+            match = re.match(pattern, name)
+            if not match:
+                return Response({
+                    'success': False,
+                    'error': 'Invalid section name format. Expected: CPE[year][semester]S[number]'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            program, year_digit, sem_digit, section_num = match.groups()
+            if int(year_digit) != year_level or int(sem_digit) != semester:
+                return Response({
+                    'success': False,
+                    'error': 'Section name year/semester must match selected values'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if name already exists in curriculum
+            if Section.objects.filter(name=name, curriculum=section.curriculum).exclude(id=section_id).exists():
+                return Response({
+                    'success': False,
+                    'error': 'Section name already exists'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Update section
+            section.name = name
+            section.year_level = year_level
+            section.semester = semester
+            section.max_students = max_students
+            section.status = status_choice
+            section.save()
+            
+            # Log activity
+            log_activity(
+                user=request.user,
+                action='edit',
+                entity_type='section',
+                entity_name=section.name,
+                message=f'Edited section via API: {section.name}'
+            )
+            
+            return Response({
+                'success': True,
+                'message': 'Section updated successfully',
+                'section_id': section.id
+            }, status=status.HTTP_200_OK)
+        
+        elif request.method == 'DELETE':
+            section_name = section.name
+            
+            # Delete all schedules for this section
+            Schedule.objects.filter(section=section).delete()
+            
+            # Delete section
+            section.delete()
+            
+            # Log activity
+            log_activity(
+                user=request.user,
+                action='delete',
+                entity_type='section',
+                entity_name=section_name,
+                message=f'Deleted section via API: {section_name}'
+            )
+            
+            return Response({
+                'success': True,
+                'message': 'Section deleted successfully'
+            }, status=status.HTTP_204_NO_CONTENT)
+    
+    except Http404:
+        return Response({'error': 'Section not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['PUT', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def api_edit_delete_schedule(request, schedule_id):
+    """Edit or delete a schedule (mobile API)"""
+    try:
+        schedule = get_object_or_404(Schedule, id=schedule_id)
+        
+        if request.method == 'PUT':
+            # Update schedule
+            course_id = request.data.get('course_id', schedule.course.id)
+            section_id = request.data.get('section_id', schedule.section.id)
+            faculty_id = request.data.get('faculty_id')
+            room_id = request.data.get('room_id')
+            day = int(request.data.get('day', schedule.day))
+            start_time = request.data.get('start_time', schedule.start_time)
+            end_time = request.data.get('end_time', schedule.end_time)
+            
+            # Get related objects
+            try:
+                course = Course.objects.get(id=course_id)
+                section = Section.objects.get(id=section_id)
+            except (Course.DoesNotExist, Section.DoesNotExist):
+                return Response({
+                    'success': False,
+                    'error': 'Course or Section not found'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            faculty = None
+            if faculty_id:
+                try:
+                    faculty = Faculty.objects.get(id=faculty_id)
+                except Faculty.DoesNotExist:
+                    return Response({
+                        'success': False,
+                        'error': 'Faculty not found'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            room = None
+            if room_id:
+                try:
+                    room = Room.objects.get(id=room_id)
+                except Room.DoesNotExist:
+                    return Response({
+                        'success': False,
+                        'error': 'Room not found'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Update schedule
+            schedule.course = course
+            schedule.section = section
+            schedule.faculty = faculty
+            schedule.room = room
+            schedule.day = day
+            schedule.start_time = start_time
+            schedule.end_time = end_time
+            
+            # Validate
+            try:
+                schedule.full_clean()
+            except ValidationError as ve:
+                return Response({
+                    'success': False,
+                    'error': str(ve)
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            schedule.save()
+            
+            # Log activity
+            log_activity(
+                user=request.user,
+                action='edit',
+                entity_type='schedule',
+                entity_name=f"{course.course_code} - {section.name}",
+                message=f'Edited schedule via API: {course.course_code}'
+            )
+            
+            return Response({
+                'success': True,
+                'message': 'Schedule updated successfully',
+                'schedule_id': schedule.id
+            }, status=status.HTTP_200_OK)
+        
+        elif request.method == 'DELETE':
+            course_code = schedule.course.course_code
+            section_name = schedule.section.name
+            schedule.delete()
+            
+            # Log activity
+            log_activity(
+                user=request.user,
+                action='delete',
+                entity_type='schedule',
+                entity_name=f"{course_code} - {section_name}",
+                message=f'Deleted schedule via API: {course_code}'
+            )
+            
+            return Response({
+                'success': True,
+                'message': 'Schedule deleted successfully'
+            }, status=status.HTTP_204_NO_CONTENT)
+    
+    except Http404:
+        return Response({'error': 'Schedule not found'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

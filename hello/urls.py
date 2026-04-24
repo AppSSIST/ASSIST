@@ -87,6 +87,7 @@ urlpatterns = [
     path('api/auth/password-reset/', views.api_password_reset, name='api_password_reset'),
     path('api/auth/password-reset/confirm/', views.api_password_reset_confirm, name='api_password_reset_confirm'),
     path('api/schedules/available-resources/', views.get_available_resources, name='get_available_resources'),
+    path('api/schedule/available-resources/', views.get_available_resources, name='schedule_available_resources'),  # Alias for mobile app
     path('api/user-faculty-data/', views.get_user_faculty_data, name='get_user_faculty_data'),
     path('api/user-profile-update/', views.api_user_profile_update, name='api_user_profile_update'),
 
@@ -123,5 +124,21 @@ urlpatterns = [
     
     # API endpoint for schedule operations
     path('api/schedules/', views.api_schedules, name='api_schedules'),
+    path('api/schedule/', views.api_schedules, name='api_schedule'),  # Alias for mobile app (singular)
+    
+    # Mobile CRUD API endpoints for Faculty
+    path('api/faculty/<int:faculty_id>/', views.api_edit_delete_faculty, name='api_edit_delete_faculty'),
+    
+    # Mobile CRUD API endpoints for Course
+    path('api/courses/<int:course_id>/edit/', views.api_edit_delete_course, name='api_edit_delete_course'),
+    
+    # Mobile CRUD API endpoints for Room
+    path('api/rooms/<int:room_id>/', views.api_edit_delete_room, name='api_edit_delete_room'),
+    
+    # Mobile CRUD API endpoints for Section
+    path('api/sections/<int:section_id>/', views.api_edit_delete_section, name='api_edit_delete_section'),
+    
+    # Mobile CRUD API endpoints for Schedule
+    path('api/schedules/<int:schedule_id>/', views.api_edit_delete_schedule, name='api_edit_delete_schedule'),
 ]
 
