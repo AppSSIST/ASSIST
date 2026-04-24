@@ -33,6 +33,7 @@ urlpatterns = [
     path('admin/room/<int:room_id>/schedule/print/', views.admin_room_schedule_print, name='admin_room_schedule_print'),
     path('admin/schedule/add/', views.add_schedule, name='add_schedule'),
     path('admin/schedule/delete/<int:schedule_id>/', views.delete_schedule, name='delete_schedule'),
+    path('admin/schedule/edit/new/', views.edit_schedule, {'schedule_id': None}, name='edit_schedule_new'),
     path('admin/schedule/edit/<int:schedule_id>/', views.edit_schedule, name='edit_schedule'),
     
     # Curriculum operations

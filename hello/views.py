@@ -3530,13 +3530,47 @@ def delete_curriculum(request, curriculum_id):
     return JsonResponse({'success': False})
 
 @login_required
-def edit_schedule(request, schedule_id):
-    """Edit existing schedule entry"""
-    schedule = get_object_or_404(Schedule, id=schedule_id)
+def edit_schedule(request, schedule_id=None):
+    """Edit existing schedule entry or add a new schedule"""
+    # Determine if this is an add or edit operation
+    is_add = schedule_id is None
     
+    # For GET requests, return empty data for new schedules or existing data for editing
+    if request.method == 'GET':
+        if is_add:
+            # Return empty data for new schedule form
+            section_id = request.GET.get('section')
+            return JsonResponse({
+                'id': None,
+                'section': section_id or '',
+                'course': '',
+                'faculty': '',
+                'room': '',
+                'day': '',
+                'start_time': '07:30',
+                'end_time': '08:30',
+                'is_add': True
+            })
+        else:
+            # Return existing schedule data for editing
+            schedule = get_object_or_404(Schedule, id=schedule_id)
+            return JsonResponse({
+                'id': schedule.id,
+                'section': schedule.section.id,
+                'course': schedule.course.id,
+                'faculty': schedule.faculty.id if schedule.faculty else '',
+                'room': schedule.room.id if schedule.room else '',
+                'day': schedule.day,
+                'start_time': schedule.start_time,
+                'end_time': schedule.end_time,
+                'is_add': False
+            })
+    
+    # Handle POST requests (add or update)
     if request.method == 'POST':
         try:
             course_id = request.POST.get('course')
+            section_id = request.POST.get('section')
             faculty_id = request.POST.get('faculty')
             room_id = request.POST.get('room')
             day = request.POST.get('day')
@@ -3544,66 +3578,241 @@ def edit_schedule(request, schedule_id):
             end_time = request.POST.get('end_time')
             
             course = Course.objects.get(id=course_id)
+            section = Section.objects.get(id=section_id) if section_id else None
             faculty = Faculty.objects.get(id=faculty_id) if faculty_id else None
             room = Room.objects.get(id=room_id) if room_id else None
             
-            schedule.course = course
-            schedule.faculty = faculty
-            schedule.room = room
-            schedule.day = int(day)
-            schedule.start_time = start_time
-            schedule.end_time = end_time
-            # Quick server-side enforcement of allowed window (07:30 - 21:30)
-            try:
-                def _tmin(tstr):
-                    h, m = map(int, tstr.split(':'))
-                    return h * 60 + m
-
-                min_allowed = 7 * 60 + 30
-                max_allowed = 21 * 60 + 30
-                if start_time and end_time:
-                    smin = _tmin(start_time)
-                    emin = _tmin(end_time)
-                    if smin < min_allowed or emin > max_allowed:
-                        return JsonResponse({
-                            'success': False,
-                            'errors': [f'Schedule times must be within 07:30 and 21:30. Received {start_time} - {end_time}']
-                        })
-            except Exception:
-                pass
-
-            schedule.full_clean()
-            schedule.save()
+            # Time validation helper
+            def _tmin(tstr):
+                h, m = map(int, tstr.split(':'))
+                return h * 60 + m
             
-            log_activity(
-                user=request.user,
-                action='edit',
-                entity_type='schedule',
-                entity_name=f"{course.course_code} - {schedule.section.name}",
-                message=f'Edited schedule: {course.course_code} for {schedule.section.name}'
-            )
+            min_allowed = 7 * 60 + 30
+            max_allowed = 21 * 60 + 30
             
-            return JsonResponse({
-                'success': True,
-                'message': 'Schedule updated successfully'
-            })
+            # Validate time window
+            if start_time and end_time:
+                smin = _tmin(start_time)
+                emin = _tmin(end_time)
+                if smin < min_allowed or emin > max_allowed:
+                    return JsonResponse({
+                        'success': False,
+                        'errors': [f'Schedule times must be within 07:30 and 21:30. Received {start_time} - {end_time}']
+                    })
+            
+            if is_add:
+                # ADD MODE: Create new schedule
+                # Check for duplicate course on same day
+                existing_course = Schedule.objects.filter(
+                    section=section,
+                    course=course,
+                    day=int(day)
+                ).exists()
+                
+                if existing_course:
+                    return JsonResponse({
+                        'success': False,
+                        'errors': [f'{course.course_code} is already scheduled on {dict(Schedule.DAY_CHOICES)[int(day)]}. A course cannot have multiple sessions on the same day.']
+                    })
+                
+                # Check course hour requirements for ADD mode
+                try:
+                    def _time_to_minutes(tstr):
+                        h, m = map(int, tstr.split(':'))
+                        return h * 60 + m
+                    
+                    if start_time and end_time:
+                        smin = _time_to_minutes(start_time)
+                        emin = _time_to_minutes(end_time)
+                        duration_minutes = emin - smin
+                        new_duration_hours = duration_minutes / 60
+                    else:
+                        new_duration_hours = 0
+                    
+                    # Get lecture and lab hours for the course
+                    lecture_hours = course.lecture_hours or 0
+                    lab_hours = course.laboratory_hours or 0
+                    
+                    # Calculate current usage for this course in this section
+                    current_schedules = Schedule.objects.filter(
+                        section=section,
+                        course=course
+                    )
+                    
+                    lecture_used = 0
+                    lab_used = 0
+                    
+                    for s in current_schedules:
+                        # Count hours regardless of room assignment, but use room_type if available
+                        if s.room and s.room.room_type == 'lecture':
+                            lecture_used += (s.duration or 0) / 60
+                        elif s.room and s.room.room_type == 'laboratory':
+                            lab_used += (s.duration or 0) / 60
+                        elif not s.room:
+                            # If no room is assigned, count as lecture by default
+                            lecture_used += (s.duration or 0) / 60
+                    
+                    # Check if the new duration would exceed requirements
+                    if room and room.room_type == 'lecture':
+                        if lecture_hours > 0 and lecture_used + new_duration_hours > lecture_hours:
+                            return JsonResponse({
+                                'success': False,
+                                'errors': [f'Cannot create: This would use {lecture_used + new_duration_hours:.1f}hrs of lecture, but {course.course_code} requires only {lecture_hours}hrs total.']
+                            })
+                    elif room and room.room_type == 'laboratory':
+                        if lab_hours > 0 and lab_used + new_duration_hours > lab_hours:
+                            return JsonResponse({
+                                'success': False,
+                                'errors': [f'Cannot create: This would use {lab_used + new_duration_hours:.1f}hrs of lab, but {course.course_code} requires only {lab_hours}hrs total.']
+                            })
+                    elif not room:
+                        # If no room selected, assume lecture and check lecture hours
+                        if lecture_hours > 0 and lecture_used + new_duration_hours > lecture_hours:
+                            return JsonResponse({
+                                'success': False,
+                                'errors': [f'Cannot create: This would use {lecture_used + new_duration_hours:.1f}hrs of lecture, but {course.course_code} requires only {lecture_hours}hrs total.']
+                            })
+                except Exception as e:
+                    # Log but don't fail on hour calculation errors
+                    import traceback
+                    print(f"Warning: Error calculating hours in add mode: {str(e)}")
+                    print(traceback.format_exc())
+                
+                # Create new schedule
+                schedule = Schedule(
+                    course=course,
+                    section=section,
+                    faculty=faculty,
+                    room=room,
+                    day=int(day),
+                    start_time=start_time,
+                    end_time=end_time
+                )
+                
+                schedule.full_clean()
+                schedule.save()
+                
+                log_activity(
+                    user=request.user,
+                    action='add',
+                    entity_type='schedule',
+                    entity_name=f"{course.course_code} - {section.name}",
+                    message=f'Created schedule: {course.course_code} for {section.name} on {dict(Schedule.DAY_CHOICES)[int(day)]}'
+                )
+                
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Schedule created successfully'
+                })
+            
+            else:
+                # EDIT MODE: Update existing schedule
+                schedule = get_object_or_404(Schedule, id=schedule_id)
+                
+                # Check for duplicate course on same day (excluding current schedule)
+                existing_course = Schedule.objects.filter(
+                    section=section,
+                    course=course,
+                    day=int(day)
+                ).exclude(pk=schedule.pk).exists()
+                
+                if existing_course:
+                    return JsonResponse({
+                        'success': False,
+                        'errors': [f'{course.course_code} is already scheduled on {dict(Schedule.DAY_CHOICES)[int(day)]}. A course cannot have multiple sessions on the same day.']
+                    })
+                
+                # Check course hour requirements
+                try:
+                    def _time_to_minutes(tstr):
+                        h, m = map(int, tstr.split(':'))
+                        return h * 60 + m
+                    
+                    if start_time and end_time:
+                        smin = _time_to_minutes(start_time)
+                        emin = _time_to_minutes(end_time)
+                        duration_minutes = emin - smin
+                        new_duration_hours = duration_minutes / 60
+                    else:
+                        new_duration_hours = 0
+                    
+                    # Get lecture and lab hours for the course
+                    lecture_hours = course.lecture_hours or 0
+                    lab_hours = course.laboratory_hours or 0
+                    
+                    # Calculate current usage excluding this schedule
+                    current_schedules = Schedule.objects.filter(
+                        section=section,
+                        course=course
+                    ).exclude(pk=schedule.pk)
+                    
+                    lecture_used = 0
+                    lab_used = 0
+                    
+                    for s in current_schedules:
+                        # Count hours regardless of room assignment, but use room_type if available
+                        if s.room and s.room.room_type == 'lecture':
+                            lecture_used += (s.duration or 0) / 60
+                        elif s.room and s.room.room_type == 'laboratory':
+                            lab_used += (s.duration or 0) / 60
+                        elif not s.room:
+                            # If no room is assigned, count as lecture by default
+                            lecture_used += (s.duration or 0) / 60
+                    
+                    # Check if the new duration would exceed requirements
+                    if room and room.room_type == 'lecture':
+                        if lecture_hours > 0 and lecture_used + new_duration_hours > lecture_hours:
+                            return JsonResponse({
+                                'success': False,
+                                'errors': [f'Cannot update: This would use {lecture_used + new_duration_hours:.1f}hrs of lecture, but {course.course_code} requires only {lecture_hours}hrs total.']
+                            })
+                    elif room and room.room_type == 'laboratory':
+                        if lab_hours > 0 and lab_used + new_duration_hours > lab_hours:
+                            return JsonResponse({
+                                'success': False,
+                                'errors': [f'Cannot update: This would use {lab_used + new_duration_hours:.1f}hrs of lab, but {course.course_code} requires only {lab_hours}hrs total.']
+                            })
+                    elif not room:
+                        # If no room selected, assume lecture and check lecture hours
+                        if lecture_hours > 0 and lecture_used + new_duration_hours > lecture_hours:
+                            return JsonResponse({
+                                'success': False,
+                                'errors': [f'Cannot update: This would use {lecture_used + new_duration_hours:.1f}hrs of lecture, but {course.course_code} requires only {lecture_hours}hrs total.']
+                            })
+                except Exception as e:
+                    # Log but don't fail on hour calculation errors
+                    import traceback
+                    print(f"Warning: Error calculating hours in edit mode: {str(e)}")
+                    print(traceback.format_exc())
+                
+                schedule.course = course
+                schedule.faculty = faculty
+                schedule.room = room
+                schedule.day = int(day)
+                schedule.start_time = start_time
+                schedule.end_time = end_time
+                
+                schedule.full_clean()
+                schedule.save()
+                
+                log_activity(
+                    user=request.user,
+                    action='edit',
+                    entity_type='schedule',
+                    entity_name=f"{course.course_code} - {schedule.section.name}",
+                    message=f'Edited schedule: {course.course_code} for {schedule.section.name}'
+                )
+                
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Schedule updated successfully'
+                })
             
         except Exception as e:
             return JsonResponse({
                 'success': False,
                 'errors': [str(e)]
             })
-    
-    # Return schedule data for editing
-    return JsonResponse({
-        'id': schedule.id,
-        'course': schedule.course.id,
-        'faculty': schedule.faculty.id if schedule.faculty else '',
-        'room': schedule.room.id if schedule.room else '',
-        'day': schedule.day,
-        'start_time': schedule.start_time,
-        'end_time': schedule.end_time
-    })
 
 
 @login_required(login_url='admin_login')

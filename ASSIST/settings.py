@@ -42,7 +42,7 @@ DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = config(
     'ALLOWED_HOSTS',
-    default='auto-scheduling-7.onrender.com,localhost,127.0.0.1,testserver,10.0.2.2,192.168.1.17,192.168.1.12',
+    default='auto-scheduling-7.onrender.com,localhost,127.0.0.1,testserver,10.0.2.2,10.201.37.25,192.168.1.17',
 )
 ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS.split(',') if host.strip()]
 
@@ -189,8 +189,8 @@ EMAIL_TIMEOUT = int(config('EMAIL_TIMEOUT', default='10'))
 # CORS Configuration for Mobile App
 # Allow requests from mobile phone on local network
 CORS_ALLOWED_ORIGINS = [
-    "http://192.168.1.12:*",  # Phone IP (all ports)
-    "http://192.168.1.17:*",  # Backend IP (all ports)
+    "http://10.201.37.25:*",  # Backend PC IP (all ports) - Django runs on :8000
+    "http://192.168.1.17:*",  # Phone/Mobile IP (all ports)
     "http://localhost:*",
     "http://127.0.0.1:*",
 ]

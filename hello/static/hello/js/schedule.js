@@ -259,17 +259,23 @@ let currentSectionId = null;
             
             currentSchedules.forEach(schedule => {
                 // Skip the schedule we're excluding (editing)
-                if (schedule.id == excludeScheduleId) {
+                // Handle both string and number IDs
+                if (String(schedule.id) === String(excludeScheduleId)) {
                     return;
                 }
                 
                 if (schedule.course_id == courseId && schedule.section_id == sectionId) {
                     const duration = schedule.duration || 0;
+                    const durationHours = duration / 60;
                     
                     if (schedule.room_type === 'lecture') {
-                        lectureHours += duration / 60;
+                        lectureHours += durationHours;
                     } else if (schedule.room_type === 'laboratory') {
-                        labHours += duration / 60;
+                        labHours += durationHours;
+                    } else if (schedule.room_type === null || schedule.room_type === undefined) {
+                        // If room_type is not set, count as lecture by default (can be adjusted based on room)
+                        console.warn('Schedule has no room_type assigned:', schedule);
+                        lectureHours += durationHours;
                     }
                 }
             });
@@ -298,14 +304,20 @@ let currentSectionId = null;
                 
                 if (schedule.course_id == courseId && schedule.section_id == sectionId) {
                     const duration = schedule.duration || 0;
+                    const durationHours = duration / 60;
                     console.log('    MATCHED! room_type:', schedule.room_type, 'duration:', duration);
                     
                     if (schedule.room_type === 'lecture') {
-                        lectureHours += duration / 60;
-                        console.log('    Added to lecture:', duration / 60, 'total lecture:', lectureHours);
+                        lectureHours += durationHours;
+                        console.log('    Added to lecture:', durationHours, 'total lecture:', lectureHours);
                     } else if (schedule.room_type === 'laboratory') {
-                        labHours += duration / 60;
-                        console.log('    Added to lab:', duration / 60, 'total lab:', labHours);
+                        labHours += durationHours;
+                        console.log('    Added to lab:', durationHours, 'total lab:', labHours);
+                    } else if (schedule.room_type === null || schedule.room_type === undefined) {
+                        // If room_type is not set, count as lecture by default
+                        console.warn('WARNING: Schedule has no room_type assigned:', schedule);
+                        lectureHours += durationHours;
+                        console.log('    Added to lecture (no room_type):', durationHours, 'total lecture:', lectureHours);
                     } else {
                         console.log('    WARNING: room_type is neither lecture nor laboratory:', schedule.room_type);
                     }
@@ -603,26 +615,58 @@ let currentSectionId = null;
         // Manual schedule submission - IMPROVED with validation
         // Filter available days based on selected course and time conflicts
         function filterAvailableDays() {
-            const courseId = document.getElementById('course_select').value;
-            const roomId = document.getElementById('room_select').value;
-            const startTime = document.getElementById('start_time')?.value;
-            const endTime = document.getElementById('end_time')?.value;
+            // Determine if we're in edit or add mode based on which elements exist
+            const isEditMode = document.getElementById('edit_course_select')?.offsetParent !== null;
+            
+            let courseId, roomId, startTime, endTime, dayElements;
+            
+            if (isEditMode) {
+                courseId = document.getElementById('edit_course_select').value;
+                roomId = document.getElementById('edit_room_select').value;
+                startTime = document.getElementById('edit_start_time')?.value;
+                endTime = document.getElementById('edit_end_time')?.value;
+                dayElements = document.querySelectorAll('#editScheduleModal select[name="day"] option');
+            } else {
+                courseId = document.getElementById('course_select').value;
+                roomId = document.getElementById('room_select').value;
+                startTime = document.getElementById('start_time')?.value;
+                endTime = document.getElementById('end_time')?.value;
+                dayElements = document.querySelectorAll('input[name="day"]');
+            }
+            
             const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
             const unavailableDays = new Set();
             
-            console.log('DEBUG filterAvailableDays called');
+            console.log('DEBUG filterAvailableDays called (mode:', isEditMode ? 'edit' : 'add', ')');
             console.log('  courseId:', courseId);
             console.log('  roomId:', roomId);
             console.log('  time:', startTime, '-', endTime);
-            console.log('  currentSchedules length:', currentSchedules.length);
-            console.log('  currentSchedules data:', currentSchedules);
+            console.log('  currentEditScheduleId:', currentEditScheduleId, '(type:', typeof currentEditScheduleId, ')');
+            
+            // Get the current schedule's day if in edit mode (to allow editing same day)
+            const currentSchedule = isEditMode && currentEditScheduleId 
+                ? currentSchedules.find(s => String(s.id) === String(currentEditScheduleId))
+                : null;
+            const currentScheduleDay = currentSchedule?.day;
+            
+            console.log('  currentSchedule:', currentSchedule);
+            console.log('  currentScheduleDay:', currentScheduleDay);
             
             // Check for conflicts
             if (courseId && roomId && startTime && endTime) {
-                const selectedCourseCode = document.getElementById('course_select').selectedOptions[0]?.textContent.split(' - ')[0] || '';
+                const selectedCourseOption = isEditMode 
+                    ? document.getElementById('edit_course_select').selectedOptions[0]
+                    : document.getElementById('course_select').selectedOptions[0];
+                const selectedCourseCode = selectedCourseOption?.textContent.split(' - ')[0] || '';
                 console.log('  selectedCourseCode:', selectedCourseCode);
                 
                 currentSchedules.forEach((schedule, idx) => {
+                    // Skip the current schedule being edited
+                    if (isEditMode && String(schedule.id) === String(currentEditScheduleId)) {
+                        console.log(`  Skipping current schedule (edit mode): ${schedule.id}`);
+                        return;
+                    }
+                    
                     console.log(`  Checking schedule ${idx}:`, schedule);
                     
                     // Check 1: Duplicate course on same day
@@ -663,26 +707,47 @@ let currentSectionId = null;
                 });
             }
             
+            // In edit mode, the current day should ALWAYS remain available
+            if (isEditMode && currentScheduleDay !== null && currentScheduleDay !== undefined) {
+                unavailableDays.delete(parseInt(currentScheduleDay));
+                console.log(`  Ensuring current day (${dayNames[currentScheduleDay]}) remains available for edit`);
+            }
+            
             console.log('DEBUG: unavailableDays =', Array.from(unavailableDays).map(d => dayNames[d]));
             
-            // Update checkbox visibility - hide unavailable days
-            document.querySelectorAll('input[name="day"]').forEach(checkbox => {
-                const dayNum = parseInt(checkbox.value);
-                const isUnavailable = unavailableDays.has(dayNum);
-                
-                const label = checkbox.parentElement;
-                if (isUnavailable) {
-                    label.style.display = 'none';
-                    // Uncheck if it becomes hidden
-                    if (checkbox.checked) {
-                        checkbox.checked = false;
-                    }
-                } else {
-                    label.style.display = 'flex';
+            // Update day selector visibility
+            if (isEditMode) {
+                // For edit mode, update select dropdown options
+                const daySelect = document.getElementById('edit_day_select');
+                if (daySelect) {
+                    Array.from(daySelect.options).forEach((option, index) => {
+                        if (index === 0) return; // Skip the "Select a day..." option
+                        const dayNum = parseInt(option.value);
+                        const isUnavailable = unavailableDays.has(dayNum);
+                        option.disabled = isUnavailable;
+                        option.style.color = isUnavailable ? '#ccc' : 'inherit';
+                    });
                 }
-            });
-            
-            updateDayDropdownLabel();
+            } else {
+                // For add mode, hide unavailable day checkboxes
+                document.querySelectorAll('input[name="day"]').forEach(checkbox => {
+                    const dayNum = parseInt(checkbox.value);
+                    const isUnavailable = unavailableDays.has(dayNum);
+                    
+                    const label = checkbox.parentElement;
+                    if (isUnavailable) {
+                        label.style.display = 'none';
+                        // Uncheck if it becomes hidden
+                        if (checkbox.checked) {
+                            checkbox.checked = false;
+                        }
+                    } else {
+                        label.style.display = 'flex';
+                    }
+                });
+                
+                updateDayDropdownLabel();
+            }
         }
 
         function getScheduleDayIndex(schedule) {
@@ -1338,6 +1403,53 @@ let currentSectionId = null;
         }
 
         // Edit schedule functions
+        function openAddScheduleModal(sectionId) {
+            currentEditScheduleId = null;  // Mark as add mode
+            
+            fetch(`/admin/schedule/edit/new/?section=${sectionId}`)
+                .then(res => res.json())
+                .then(data => {
+                    // Reset form for new schedule
+                    document.getElementById('edit_schedule_id').value = '';
+                    document.getElementById('edit_section_id').value = sectionId;
+                    document.getElementById('edit_section_display').value = document.getElementById('scheduleSectionName').textContent;
+                    document.getElementById('edit_course_select').value = '';
+                    document.getElementById('edit_faculty_select').value = '';
+                    document.getElementById('edit_room_select').value = '';
+                    document.getElementById('edit_day_select').value = '';
+                    
+                    document.getElementById('edit_start_time').value = '07:30';
+                    document.getElementById('edit_end_time').value = '08:30';
+                    setTimeDisplay('edit_start_time');
+                    setTimeDisplay('edit_end_time');
+                    
+                    // Hide the delete button for new schedules
+                    const deleteBtn = document.querySelector('.btn-delete');
+                    if (deleteBtn) {
+                        deleteBtn.style.display = 'none';
+                    }
+                    
+                    // Update modal title and button text
+                    document.querySelector('#editScheduleModal .modal-header h2').textContent = 'Add New Schedule';
+                    const submitBtn = document.querySelector('#editScheduleForm button[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.textContent = 'Create Schedule';
+                    }
+                    
+                    // Hide duration display for new schedule
+                    const durationDisplay = document.getElementById('duration-display-edit');
+                    if (durationDisplay) {
+                        durationDisplay.style.display = 'none';
+                    }
+                    
+                    openModal('editScheduleModal');
+                })
+                .catch(err => {
+                    console.error('Error opening add schedule modal:', err);
+                    showAlert('Error opening schedule form', 'error');
+                });
+        }
+
         function openEditScheduleModal(scheduleId) {
             currentEditScheduleId = scheduleId;
             
@@ -1345,6 +1457,8 @@ let currentSectionId = null;
                 .then(res => res.json())
                 .then(data => {
                     document.getElementById('edit_schedule_id').value = data.id;
+                    document.getElementById('edit_section_id').value = data.section;
+                    document.getElementById('edit_section_display').value = document.querySelector(`option[value="${data.section}"]`)?.textContent || '';
                     document.getElementById('edit_course_select').value = data.course;
                     document.getElementById('edit_faculty_select').value = data.faculty;
                     document.getElementById('edit_room_select').value = data.room;
@@ -1355,6 +1469,21 @@ let currentSectionId = null;
                     setTimeDisplay('edit_start_time');
                     setTimeDisplay('edit_end_time');
                     filterAvailableInstructors('edit_faculty_select');
+                    filterAvailableDays(); // Filter days based on course and room constraints
+                    showCourseRequirements('edit'); // Show course requirements info
+                    
+                    // Show the delete button for existing schedules
+                    const deleteBtn = document.querySelector('.btn-delete');
+                    if (deleteBtn) {
+                        deleteBtn.style.display = 'inline-flex';
+                    }
+                    
+                    // Update modal title and button text
+                    document.querySelector('#editScheduleModal .modal-header h2').textContent = 'Edit Schedule';
+                    const submitBtn = document.querySelector('#editScheduleForm button[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.textContent = 'Update Schedule';
+                    }
                     
                     // Update duration display for edit modal
                     const [startHour, startMin] = data.start_time.split(':').map(Number);
@@ -1411,34 +1540,38 @@ let currentSectionId = null;
                 return;
             }
             
-            // FIXED VALIDATION: Check if editing would exceed required hours
-            // Exclude the current schedule being edited from the calculation
+            // Determine if this is add or edit mode
+            const isAdd = !currentEditScheduleId;
+            
+            // FIXED VALIDATION: Check if editing/adding would exceed required hours
+            // Exclude the current schedule being edited from the calculation (null for add mode)
             const courseSelect = document.getElementById('edit_course_select');
             const roomSelect = document.getElementById('edit_room_select');
-            const sectionSelect = document.getElementById('section_select');
+            const sectionSelect = isAdd ? document.getElementById('edit_section_id') : document.getElementById('section_select');
             
-            if (courseSelect.value && roomSelect.value && sectionSelect.value) {
+            // Validate course and section are selected (room is optional)
+            if (courseSelect.value && sectionSelect.value) {
                 const selectedCourseOption = courseSelect.selectedOptions[0];
                 const lectureHours = parseInt(selectedCourseOption.dataset.lectureHours) || 0;
                 const labHours = parseInt(selectedCourseOption.dataset.laboratoryHours) || 0;
                 const courseId = courseSelect.value;
                 
-                const roomOption = roomSelect.selectedOptions[0];
-                const roomType = roomOption.dataset.roomType;
+                const roomOption = roomSelect.value ? roomSelect.selectedOptions[0] : null;
+                const roomType = roomOption ? roomOption.dataset.roomType : null;
                 
                 const sectionId = sectionSelect.value;
                 const newDuration = calculateDuration(startTimeEdit, endTimeEdit) / 60; // convert to hours
                 
-                // Get hours excluding THIS schedule being edited
+                // Get hours excluding THIS schedule being edited (or all for new schedules)
                 const courseHoursExcluding = getCourseHoursInSectionExcluding(courseId, sectionId, currentEditScheduleId);
                 
-                // Check if this edit would exceed requirements
+                // Check if this edit/add would exceed requirements
                 if (roomType === 'lecture') {
                     const lecNewUsage = courseHoursExcluding.lecture + newDuration;
                     
                     if (lectureHours > 0 && lecNewUsage > lectureHours) {
                         const courseCode = selectedCourseOption.textContent.split(' - ')[0];
-                        showAlert(`Cannot update: This would use ${lecNewUsage.toFixed(1)}hrs of lecture, but ${courseCode} requires only ${lectureHours}hrs total.`, 'error');
+                        showAlert(`Cannot ${isAdd ? 'create' : 'update'}: This would use ${lecNewUsage.toFixed(1)}hrs of lecture, but ${courseCode} requires only ${lectureHours}hrs total.`, 'error');
                         return;
                     }
                 } else if (roomType === 'laboratory') {
@@ -1446,7 +1579,16 @@ let currentSectionId = null;
                     
                     if (labHours > 0 && labNewUsage > labHours) {
                         const courseCode = selectedCourseOption.textContent.split(' - ')[0];
-                        showAlert(`Cannot update: This would use ${labNewUsage.toFixed(1)}hrs of lab, but ${courseCode} requires only ${labHours}hrs total.`, 'error');
+                        showAlert(`Cannot ${isAdd ? 'create' : 'update'}: This would use ${labNewUsage.toFixed(1)}hrs of lab, but ${courseCode} requires only ${labHours}hrs total.`, 'error');
+                        return;
+                    }
+                } else if (!roomType) {
+                    // No room selected or room has no type - assume lecture by default
+                    const lecNewUsage = courseHoursExcluding.lecture + newDuration;
+                    
+                    if (lectureHours > 0 && lecNewUsage > lectureHours) {
+                        const courseCode = selectedCourseOption.textContent.split(' - ')[0];
+                        showAlert(`Cannot ${isAdd ? 'create' : 'update'}: This would use ${lecNewUsage.toFixed(1)}hrs of lecture, but ${courseCode} requires only ${lectureHours}hrs total.`, 'error');
                         return;
                     }
                 }
@@ -1455,14 +1597,22 @@ let currentSectionId = null;
             const formData = new FormData(event.target);
             const scheduleId = document.getElementById('edit_schedule_id').value;
             
-            fetchWithCSRF(`/admin/schedule/edit/${scheduleId}/`, {
+            // Determine the endpoint based on add/edit mode
+            const endpoint = isAdd ? '/admin/schedule/edit/new/' : `/admin/schedule/edit/${scheduleId}/`;
+            
+            // For add mode, ensure section is in the form data
+            if (isAdd && !formData.has('section')) {
+                formData.set('section', document.getElementById('edit_section_id').value);
+            }
+            
+            fetchWithCSRF(endpoint, {
                 method: 'POST',
                 body: formData
             })
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    showAlert('Schedule updated successfully!', 'success');
+                    showAlert(isAdd ? 'Schedule created successfully!' : 'Schedule updated successfully!', 'success');
                     closeModal('editScheduleModal');
                     if (currentSectionId) {
                         setTimeout(() => {
@@ -1473,12 +1623,12 @@ let currentSectionId = null;
                     }
                 } else {
                     const err = data.errors ? data.errors.join(', ') : (data.error || 'Unknown error');
-                    showAlert('Error updating schedule: ' + err, 'error');
+                    showAlert(`Error ${isAdd ? 'creating' : 'updating'} schedule: ` + err, 'error');
                 }
             })
             .catch(err => {
-                console.error('Edit error:', err);
-                showAlert('Error updating schedule', 'error');
+                console.error('Schedule action error:', err);
+                showAlert(`Error ${isAdd ? 'creating' : 'updating'} schedule`, 'error');
             });
         }
 

@@ -4,8 +4,8 @@
 
 | Device | IP Address | Status |
 |--------|-----------|--------|
-| Backend (Your PC) | 192.168.1.17 | ✅ Ready |
-| Mobile Phone | 192.168.1.12 | ✅ Connected |
+| Backend (Your PC) | 10.201.37.25 | ✅ Ready |
+| Mobile Phone | 192.168.1.17 | ✅ Connected |
 | Network | 192.168.1.x | ✅ Local WiFi |
 
 ---
@@ -13,8 +13,8 @@
 ## Backend Configuration ✅ COMPLETE
 
 Your Django backend has been configured to accept requests from:
-- ✅ `192.168.1.17` (Backend IP)
-- ✅ `192.168.1.12` (Phone IP)
+- ✅ `10.201.37.25` (Backend IP)
+- ✅ `192.168.1.17` (Phone IP)
 - ✅ CORS enabled for cross-origin requests
 - ✅ `corsheaders` middleware installed
 
@@ -22,14 +22,14 @@ Your Django backend has been configured to accept requests from:
 
 1. **ALLOWED_HOSTS** updated in `ASSIST/settings.py`:
    ```python
-   ALLOWED_HOSTS = [..., '192.168.1.17', '192.168.1.12']
+   ALLOWED_HOSTS = [..., '10.201.37.25', '192.168.1.17']
    ```
 
 2. **CORS Configuration** added:
    ```python
    CORS_ALLOWED_ORIGINS = [
-       "http://192.168.1.12:*",  # Your phone
-       "http://192.168.1.17:*",  # Backend
+       "http://192.168.1.17:*",  # Your phone
+       "http://10.201.37.25:*",  # Backend
    ]
    CORS_ALLOW_CREDENTIALS = True
    ```
@@ -47,7 +47,7 @@ Your Django backend has been configured to accept requests from:
 Use this URL in your mobile app configuration:
 
 ```
-http://192.168.1.17:8000
+http://10.201.37.25:8000
 ```
 
 ### API Endpoints Available
@@ -71,7 +71,7 @@ http://192.168.1.17:8000
 
 ```javascript
 // In your API configuration file
-const API_BASE_URL = 'http://192.168.1.17:8000';
+const API_BASE_URL = 'http://10.201.37.25:8000';
 
 // Example: Making a login request
 const login = async (username, password) => {
@@ -98,7 +98,7 @@ Make a test request from your mobile app:
 
 ```bash
 # From phone's mobile app (or via curl):
-curl http://192.168.1.17:8000/api/curriculums/
+curl http://10.201.37.25:8000/api/curriculums/
 ```
 
 ---
@@ -115,7 +115,7 @@ python manage.py runserver 0.0.0.0:8000
 Or if using a specific IP:
 
 ```powershell
-python manage.py runserver 192.168.1.17:8000
+python manage.py runserver 10.201.37.25:8000
 ```
 
 ---
@@ -130,7 +130,7 @@ python manage.py runserver 192.168.1.17:8000
 3. Verify phone and PC are on same WiFi network
 4. Ping from phone to backend:
    ```
-   ping 192.168.1.17
+   ping 10.201.37.25
    ```
 
 ### Issue: 404 Not Found on Endpoints
@@ -165,7 +165,7 @@ python manage.py runserver 192.168.1.17:8000
 ```javascript
 class APIService {
   constructor() {
-    this.baseURL = 'http://192.168.1.17:8000';
+    this.baseURL = 'http://10.201.37.25:8000';
     this.token = null;
   }
 
@@ -221,7 +221,7 @@ class APIService {
 
 ```
 Your PC (Backend)           Your Phone (Mobile App)
-192.168.1.17:8000  ←——WiFi——→  192.168.1.12
+10.201.37.25:8000  ←——WiFi——→  192.168.1.17
 
 Django Server Running         Mobile App
 - API Endpoints               - Makes HTTP Requests
@@ -252,7 +252,7 @@ python manage.py runserver 0.0.0.0:8000
 ### Check Backend is Accessible:
 ```bash
 # From phone or another device:
-curl http://192.168.1.17:8000/api/curriculums/
+curl http://10.201.37.25:8000/api/curriculums/
 ```
 
 ### View Logs:
