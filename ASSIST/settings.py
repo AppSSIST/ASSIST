@@ -42,7 +42,7 @@ DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = config(
     'ALLOWED_HOSTS',
-    default='auto-scheduling-7.onrender.com,localhost,127.0.0.1,testserver,10.0.2.2',
+    default='auto-scheduling-7.onrender.com,localhost,127.0.0.1,testserver,10.0.2.2,192.168.1.17,192.168.1.12',
 )
 ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS.split(',') if host.strip()]
 
@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     'hello',
     'rest_framework',
     'rest_framework_simplejwt',
@@ -65,6 +66,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -183,4 +185,29 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@example.com')
 BREVO_API_KEY = config('BREVO_API_KEY', default=None)
 EMAIL_TIMEOUT = int(config('EMAIL_TIMEOUT', default='10'))
+
+# CORS Configuration for Mobile App
+# Allow requests from mobile phone on local network
+CORS_ALLOWED_ORIGINS = [
+    "http://192.168.1.12:*",  # Phone IP (all ports)
+    "http://192.168.1.17:*",  # Backend IP (all ports)
+    "http://localhost:*",
+    "http://127.0.0.1:*",
+]
+
+# Allow all headers and credentials for mobile app
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = False  # Use whitelist instead
+
+# For mobile apps in development, be more permissive
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = False
+    CORS_ALLOWED_ORIGINS.extend([
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://localhost:8080",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:8080",
+    ])
 

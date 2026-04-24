@@ -601,19 +601,23 @@ ASSIST Administration Team'''
                     )
                     email_sent = True
                     message_text = f'Faculty added successfully. An invitation email has been sent to {email}.'
-                except Exception as brevo_error:
-                    # If Brevo fails, log the error and inform user
+                except ValueError as brevo_error:
+                    # If Brevo API key is not configured or enabled, still create the account
+                    # but inform the user that email couldn't be sent
                     email_sent = False
                     message_text = (
                         'Faculty added successfully, but email could not be sent. '
-                        'Please check your Brevo API key configuration.'
+                        'Please check your Brevo API key configuration and ensure it is enabled. '
+                        f'Credentials: Username: {username}, Password: {password}'
                     )
+                    print(f"Brevo email failed: {str(brevo_error)}")
             except Exception as e:
                 email_sent = False
                 message_text = (
                     'Faculty added successfully, but email could not be sent. '
                     'An error occurred during email processing.'
                 )
+                print(f"Email processing error: {str(e)}")
             
             # Log activity
             log_activity(
@@ -4332,18 +4336,52 @@ def get_faculty_list(request):
     if request.method == 'POST':
         # Handle adding new faculty
         try:
+            print(f"[API Faculty POST] Request content type: {request.content_type}")
+            print(f"[API Faculty POST] Request data: {request.data}")
+            print(f"[API Faculty POST] Request POST: {request.POST}")
+            
             data = request.data
             
-            # Generate username from email
-            email = data.get('email', '').strip().lower()
+            # Validate required fields
+            email = data.get('email', '').strip().lower() if data.get('email') else ''
+            first_name = data.get('first_name', '').strip() if data.get('first_name') else ''
+            last_name = data.get('last_name', '').strip() if data.get('last_name') else ''
+            gender = data.get('gender', '').strip() if data.get('gender') else ''
+            employment_status = data.get('employment_status', '').strip() if data.get('employment_status') else ''
+            
+            print(f"[API Faculty POST] Parsed fields - email: {email}, first_name: {first_name}, last_name: {last_name}, gender: {gender}, employment_status: {employment_status}")
+            
+            # Check required fields
+            if not email:
+                print("[API Faculty POST] Missing email")
+                return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+            if not first_name:
+                print("[API Faculty POST] Missing first_name")
+                return Response({"error": "First name is required"}, status=status.HTTP_400_BAD_REQUEST)
+            if not last_name:
+                print("[API Faculty POST] Missing last_name")
+                return Response({"error": "Last name is required"}, status=status.HTTP_400_BAD_REQUEST)
+            if not gender:
+                print("[API Faculty POST] Missing gender")
+                return Response({"error": "Gender is required"}, status=status.HTTP_400_BAD_REQUEST)
+            if not employment_status:
+                print("[API Faculty POST] Missing employment_status")
+                return Response({"error": "Employment status is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Validate email domain
+            if not email.endswith('@tip.edu.ph'):
+                print(f"[API Faculty POST] Invalid email domain: {email}")
+                return Response({"error": "Only @tip.edu.ph email addresses can be used to create an account."}, status=status.HTTP_400_BAD_REQUEST)
             
             # Check if email already exists
             if Faculty.objects.filter(email__iexact=email).exists() or User.objects.filter(email__iexact=email).exists():
+                print(f"[API Faculty POST] Email already registered: {email}")
                 return Response({"error": "Email already registered"}, status=status.HTTP_400_BAD_REQUEST)
             
             # Check username availability
             username = email
             if User.objects.filter(username__iexact=username).exists():
+                print(f"[API Faculty POST] Username already taken: {username}")
                 return Response({"error": "Username already taken"}, status=status.HTTP_400_BAD_REQUEST)
             
             # Generate temporary password
@@ -4354,41 +4392,55 @@ def get_faculty_list(request):
                 username=username,
                 email=email,
                 password=password,
-                first_name=data.get('first_name', ''),
-                last_name=data.get('last_name', '')
+                first_name=first_name,
+                last_name=last_name
             )
             
-            # Set staff permissions
-            user.is_staff = True
-            user.is_superuser = False
+            # Set staff permissions based on role
+            role = data.get('role', 'faculty')
+            if role == 'admin':
+                user.is_staff = True
+                user.is_superuser = True
+            else:
+                user.is_staff = True
+                user.is_superuser = False
             user.save()
             
             # Create faculty record
             faculty = Faculty.objects.create(
                 user=user,
-                first_name=data.get('first_name', ''),
-                middle_name=data.get('middle_name', ''),
-                last_name=data.get('last_name', ''),
+                first_name=first_name,
+                middle_name=data.get('middle_name', '').strip() if data.get('middle_name') else '',
+                last_name=last_name,
                 email=email,
-                gender=data.get('gender', 'M'),
-                professional_title=data.get('professional_title', ''),
-                employment_status=data.get('employment_status', 'full_time'),
-                highest_degree=data.get('highest_degree', ''),
+                gender=gender,
+                professional_title=data.get('professional_title', '').strip() if data.get('professional_title') else '',
+                employment_status=employment_status,
+                highest_degree=data.get('highest_degree', '').strip() if data.get('highest_degree') else '',
                 prc_licensed=data.get('prc_licensed', False),
-                specialization=data.get('specialization', ''),
-                department=data.get('department', '')
+                specialization=data.get('specialization', '').strip() if data.get('specialization') else '',
+                department=data.get('department', '').strip() if data.get('department') else ''
             )
+            
+            print(f"[API Faculty POST] Faculty created successfully: {faculty.id} - {email}")
             
             return Response({
                 "id": faculty.id,
                 "first_name": faculty.first_name,
                 "last_name": faculty.last_name,
                 "email": faculty.email,
-                "employment_status": faculty.employment_status
+                "employment_status": faculty.employment_status,
+                "password": password,
+                "message": "Faculty added successfully. An account has been created."
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            import traceback
+            error_msg = str(e)
+            tb = traceback.format_exc()
+            print(f"[API Faculty POST] Exception: {error_msg}")
+            print(f"[API Faculty POST] Traceback: {tb}")
+            return Response({"error": error_msg}, status=status.HTTP_400_BAD_REQUEST)
     
     # GET request - return list of faculty
     faculty = Faculty.objects.all().order_by('last_name', 'first_name')
