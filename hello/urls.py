@@ -29,6 +29,7 @@ urlpatterns = [
     # Schedules
     path('admin/schedule/', views.schedule_view, name='schedule_view'),
     path('admin/section/<int:section_id>/schedule/print/', views.admin_section_schedule_print, name='admin_section_schedule_print'),
+    path('admin/section/<int:section_id>/admin/print/', views.admin_section_admin_print, name='admin_section_admin_print'),
     path('admin/faculty/<int:faculty_id>/schedule/print/', views.admin_faculty_schedule_print, name='admin_faculty_schedule_print'),
     path('admin/room/<int:room_id>/schedule/print/', views.admin_room_schedule_print, name='admin_room_schedule_print'),
     path('admin/schedule/add/', views.add_schedule, name='add_schedule'),

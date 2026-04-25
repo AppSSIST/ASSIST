@@ -1296,6 +1296,40 @@ def admin_section_schedule_print(request, section_id):
 
 
 @login_required(login_url='admin_login')
+def admin_section_admin_print(request, section_id):
+    """
+    Print-friendly view for admin section teaching assignment (faculty assignments).
+    Displays section info and assigned courses/faculty in a form suitable for administrative records.
+    """
+    section = get_object_or_404(Section.objects.select_related('curriculum'), id=section_id)
+    
+    schedules = Schedule.objects.filter(section=section).select_related('course', 'room', 'faculty').order_by('day', 'start_time')
+    
+    # Get unique courses for this section
+    unique_course_ids = section.schedules.values_list('course', flat=True).distinct()
+    courses = Course.objects.filter(id__in=unique_course_ids).order_by('course_code')
+    
+    # Calculate totals
+    totals = Course.objects.filter(id__in=unique_course_ids).aggregate(
+        total_lec=Sum('lecture_hours'),
+        total_lab=Sum('laboratory_hours'),
+        total_units=Sum('credit_units')
+    )
+    
+    context = {
+        'user': request.user,
+        'section': section,
+        'schedules': schedules,
+        'courses': courses,
+        'total_lec': totals.get('total_lec') or 0,
+        'total_lab': totals.get('total_lab') or 0,
+        'total_units': totals.get('total_units') or 0,
+    }
+    
+    return render(request, 'hello/section_admin_print.html', context)
+
+
+@login_required(login_url='admin_login')
 def admin_faculty_schedule_print(request, faculty_id):
     faculty = get_object_or_404(Faculty, id=faculty_id)
     schedules = Schedule.objects.filter(faculty=faculty).select_related('course', 'section', 'room').order_by('day', 'start_time')

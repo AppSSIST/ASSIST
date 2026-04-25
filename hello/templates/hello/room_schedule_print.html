@@ -47,10 +47,11 @@
         }
 
         .header {
-            text-align: center;
             margin-bottom: 12px;
             border-bottom: 2px solid #000;
             padding-bottom: 10px;
+            position: relative;
+            padding-top: 35px;
         }
 
         .header-logo {
@@ -58,6 +59,7 @@
             font-size: 12px;
             margin-bottom: 3px;
             letter-spacing: 0.5px;
+            text-align: center;
         }
 
         .header-title {
@@ -65,13 +67,29 @@
             font-size: 13px;
             margin-bottom: 3px;
             letter-spacing: 0.5px;
+            text-align: center;
         }
 
         .header-ref {
-            text-align: right;
+            position: absolute;
+            top: 0;
+            right: 0;
             font-size: 9px;
             color: #333;
-            margin-top: 2px;
+            text-align: right;
+            line-height: 1.3;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+
+        .header-ref-code {
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+
+        .header-ref-date {
+            font-size: 8px;
         }
 
         .print-schedule-container {
@@ -237,23 +255,41 @@
         }
 
         .signature-section {
-            margin-top: 10px;
+            margin-top: 15px;
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
-            gap: 12px;
+            gap: 20px;
             font-size: 8px;
             page-break-inside: avoid;
         }
 
         .signature-box {
             text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .signature-label {
+            font-weight: bold;
+            font-size: 8px;
+            margin-bottom: 8px;
         }
 
         .signature-line {
             border-top: 1px solid #000;
-            margin-top: 12px;
+            width: 100%;
             padding-top: 2px;
             font-size: 8px;
+            min-height: 30px;
+            margin-top: 24px;
+        }
+
+        .signature-title {
+            font-weight: bold;
+            font-size: 7px;
+            margin-top: -25px;
+            text-align: center;
         }
 
         .info-box-row {
@@ -422,9 +458,12 @@
 
     <div class="print-container">
         <div class="header">
+            <div class="header-ref">
+                <div class="header-ref-code">TIP-ACAD 004</div>
+                <div class="header-ref-date">Revision Status/Date: 04/25/2026</div>
+            </div>
             <div class="header-logo">TIP - TECHNOLOGICAL INSTITUTE OF THE PHILIPPINES</div>
             <div class="header-title">RECOMMENDED TEACHING ASSIGNMENT</div>
-            <div class="header-ref">TIP-ACAD-004 | Revision Status/Date: 01/2025</div>
         </div>
 
         <div class="print-schedule-container">
@@ -525,13 +564,19 @@
 
         <div class="signature-section">
             <div class="signature-box">
-                <div class="signature-line">Prepared By:</div>
+                <div class="signature-label">Prepared By:</div>
+                <div class="signature-line"></div>
+                <div class="signature-title">Program Chair / Department Head</div>
             </div>
             <div class="signature-box">
-                <div class="signature-line">Recommending Approval By:</div>
+                <div class="signature-label">Recommending Approval By:</div>
+                <div class="signature-line"></div>
+                <div class="signature-title">DEAN / AVPAA</div>
             </div>
             <div class="signature-box">
-                <div class="signature-line">Approved By:</div>
+                <div class="signature-label">Approved By:</div>
+                <div class="signature-line"></div>
+                <div class="signature-title">VPAA / SVPAA</div>
             </div>
         </div>
     </div>
